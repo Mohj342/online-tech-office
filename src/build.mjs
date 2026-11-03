@@ -22,6 +22,8 @@ const BUILD = (() => {
   return h.digest('hex').slice(0, 8);
 })();
 const asset = (p) => `${p}?v=${BUILD}`;
+const CSS = fs.readFileSync(path.join(here, 'assets/css/style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n+/g, '\n').trim();
+const CSS_HASH = crypto.createHash('sha256').update(CSS).digest('base64');
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const svcUrl = (s) => `/services/${s.slug}.html`;
@@ -42,7 +44,7 @@ const ICON = {
 const icon = (k, size = 26) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
 const logoImg = (cls = 'logo') =>
-  `<img class="${cls}" src="${asset('/assets/img/logo.svg')}" alt="${esc(S.fullName)}" width="2190" height="823">`;
+  `<img class="${cls}"${cls === 'hero-logo' ? ' fetchpriority="high"' : ''} src="${asset('/assets/img/logo.svg')}" alt="${esc(S.fullName)}" width="2190" height="823">`;
 
 /* ---------- shared layout ---------- */
 const NAV = [
@@ -72,6 +74,30 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
     areaServed: 'YE',
     knowsLanguage: 'ar'
   }).replace(/</g, '\\u003c')}</script>\n` : '';
+  const ldTag = (o) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, '\\u003c')}</script>\n`;
+  const crumbList = (items) => ldTag({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map(([n, u], i) => ({ '@type': 'ListItem', position: i + 1, name: n, item: S.siteUrl + u }))
+  });
+  let ld2 = '';
+  if (!noindex && file !== 'index.html') {
+    const trail = [['الرئيسية', '/']];
+    if (file.startsWith('services/')) trail.push(['خدماتنا', '/services.html']);
+    trail.push([title, '/' + file]);
+    ld2 = crumbList(trail);
+    if (file.startsWith('services/')) {
+      ld2 += ldTag({
+        '@context': 'https://schema.org',
+        '@type': 'Service',
+        name: title,
+        description: desc,
+        url: canon,
+        areaServed: 'YE',
+        provider: { '@type': 'ProfessionalService', name: S.fullName, url: S.siteUrl + '/' }
+      });
+    }
+  }
   const nav = NAV.map(([t, u]) => `<a href="${u}"${u === url ? ' aria-current="page"' : ''}>${t}</a>`).join('');
   const header = minimal
     ? `<header class="site-header"><div class="container bar"><a class="brand" href="/index.html">${logoImg()}</a><span class="brand-note">لوحة الإدارة</span></div></header>`
@@ -117,14 +143,13 @@ ${noindex ? '<meta name="robots" content="noindex, nofollow">\n' : `<link rel="c
 <meta property="og:locale" content="ar_AR">
 <meta property="og:title" content="${esc(fullTitle)}">
 <meta property="og:description" content="${esc(desc)}">
-<link rel="icon" type="image/png" sizes="48x48" href="/assets/img/favicon-48.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/assets/img/icon-192.png">
-<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;700&display=swap">
-<link rel="stylesheet" href="${asset('/assets/css/style.css')}">
-${ld}</head>
+<link rel="icon" type="image/png" sizes="48x48" href="${asset('/assets/img/favicon-48.png')}">
+<link rel="icon" type="image/png" sizes="192x192" href="${asset('/assets/img/icon-192.png')}">
+<link rel="apple-touch-icon" href="${asset('/assets/img/apple-touch-icon.png')}">
+<link rel="preload" href="/assets/fonts/plex-ar-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/reem-ar-700.woff2" as="font" type="font/woff2" crossorigin>
+<style>${CSS}</style>
+${ld}${ld2}</head>
 <body>
 <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
 ${header}
@@ -278,7 +303,7 @@ pages['services.html'] = layout({
   title: 'خدماتنا',
   desc: `أقسام ${S.fullName}.`,
   body: `${pageHero({ title: 'خدماتنا', lead: 'اختر القسم المناسب لتعرف التفاصيل وترسل طلبك.' })}
-<section class="section"><div class="container">${serviceCards()}</div></section>`
+<section class="section"><div class="container"><h2 class="sr">أقسام المكتب</h2>${serviceCards()}</div></section>`
 });
 
 pages['services/employment.html'] = layout({
@@ -289,8 +314,8 @@ pages['services/employment.html'] = layout({
   body: `${pageHero({ title: SV[0].title, lead: SV[0].intro, crumbs: [['خدماتنا', '/services.html']] })}
 <section class="section"><div class="container">
   <div class="split">
-    <div class="box"><h3>أبحث عن وظيفة</h3><p>أرسل الاسم الكامل والمؤهل والخبرات والوظيفة المطلوبة ومكان الإقامة ورقم التواصل. سنراجع بياناتك للاستفادة منها عند توفر فرص وظيفية مناسبة.</p><a class="btn btn-primary" href="/register.html">التسجيل كباحث عن عمل</a></div>
-    <div class="box"><h3>طلب موظفين</h3><p>أرسل اسم الجهة والوظائف المطلوبة وعدد كل وظيفة والمؤهلات ومكان العمل ورقم التواصل.</p><a class="btn btn-primary" href="/employers.html">أرسل طلب موظفين</a></div>
+    <div class="box"><h2>أبحث عن وظيفة</h2><p>أرسل الاسم الكامل والمؤهل والخبرات والوظيفة المطلوبة ومكان الإقامة ورقم التواصل. سنراجع بياناتك للاستفادة منها عند توفر فرص وظيفية مناسبة.</p><a class="btn btn-primary" href="/register.html">التسجيل كباحث عن عمل</a></div>
+    <div class="box"><h2>طلب موظفين</h2><p>أرسل اسم الجهة والوظائف المطلوبة وعدد كل وظيفة والمؤهلات ومكان العمل ورقم التواصل.</p><a class="btn btn-primary" href="/employers.html">أرسل طلب موظفين</a></div>
   </div>
 </div></section>
 <section class="section alt"><div class="container">
@@ -447,6 +472,7 @@ pages['admin/index.html'] = layout({
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 fs.cpSync(path.join(here, 'assets'), path.join(dist, 'assets'), { recursive: true });
+fs.rmSync(path.join(dist, 'assets/css'), { recursive: true, force: true }); // CSS is inlined in each page
 
 for (const [file, html] of Object.entries(pages)) {
   const out = path.join(dist, file);
@@ -473,7 +499,7 @@ fs.writeFileSync(path.join(dist, 'sitemap.xml'),
   urls.map((f) => `  <url><loc>${S.siteUrl}${f === 'index.html' ? '/' : '/' + f}</loc><lastmod>${today}</lastmod></url>`).join('\n') + `\n</urlset>\n`);
 
 // Netlify reads _headers from the published folder, so security headers also apply to drag-and-drop deploys.
-const csp = `default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
+const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'sha256-${CSS_HASH}'; font-src 'self'; img-src 'self' data:; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
 fs.writeFileSync(path.join(dist, '_headers'), `/*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
@@ -481,7 +507,7 @@ fs.writeFileSync(path.join(dist, '_headers'), `/*
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: ${csp}
 /assets/*
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=31536000, immutable
 /admin/*
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
