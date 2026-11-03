@@ -54,8 +54,24 @@ const NAV = [
 ];
 
 function layout({ file, title, desc, body, scripts = [], noindex = false, chat = true, minimal = false }) {
-  const fullTitle = file === 'index.html' ? S.fullName : `${title} | ${S.name}`;
+  const fullTitle = file === 'index.html' ? `${S.fullName} | ${S.altName} – ذمار، اليمن` : `${title} | ${S.name}`;
   const url = '/' + file;
+  const canon = S.siteUrl + (file === 'index.html' ? '/' : url);
+  const ld = file === 'index.html' ? `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'ProfessionalService',
+    name: S.fullName,
+    alternateName: [S.name, S.altName],
+    slogan: S.tagline,
+    url: S.siteUrl + '/',
+    logo: S.siteUrl + '/assets/img/icon-512.png',
+    image: S.siteUrl + '/assets/img/icon-512.png',
+    telephone: S.phones.map((x) => x.intl),
+    address: { '@type': 'PostalAddress', streetAddress: S.address, addressLocality: 'ذمار', addressCountry: 'YE' },
+    sameAs: [S.facebook],
+    areaServed: 'YE',
+    knowsLanguage: 'ar'
+  }).replace(/</g, '\\u003c')}</script>\n` : '';
   const nav = NAV.map(([t, u]) => `<a href="${u}"${u === url ? ' aria-current="page"' : ''}>${t}</a>`).join('');
   const header = minimal
     ? `<header class="site-header"><div class="container bar"><a class="brand" href="/index.html">${logoImg()}</a><span class="brand-note">لوحة الإدارة</span></div></header>`
@@ -94,7 +110,10 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="${esc(desc)}">
 <meta name="theme-color" content="#FF8F1F">
-${noindex ? '<meta name="robots" content="noindex, nofollow">\n' : ''}<meta property="og:type" content="website">
+${noindex ? '<meta name="robots" content="noindex, nofollow">\n' : `<link rel="canonical" href="${canon}">\n`}<meta property="og:type" content="website">
+<meta property="og:site_name" content="${esc(S.fullName)}">
+<meta property="og:url" content="${canon}">
+<meta property="og:image" content="${S.siteUrl}/assets/img/icon-512.png">
 <meta property="og:locale" content="ar_AR">
 <meta property="og:title" content="${esc(fullTitle)}">
 <meta property="og:description" content="${esc(desc)}">
@@ -105,7 +124,7 @@ ${noindex ? '<meta name="robots" content="noindex, nofollow">\n' : ''}<meta prop
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;700&display=swap">
 <link rel="stylesheet" href="${asset('/assets/css/style.css')}">
-</head>
+${ld}</head>
 <body>
 <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
 ${header}
@@ -446,7 +465,12 @@ const cfg = {
   SERVICES: SV.map((s) => ({ n: s.n, slug: s.slug, title: s.title, emoji: s.emoji }))
 };
 fs.writeFileSync(path.join(dist, 'assets/js/config.js'), `window.OT=${JSON.stringify(cfg)};\n`);
-fs.writeFileSync(path.join(dist, 'robots.txt'), 'User-agent: *\nDisallow: /admin/\n');
+fs.writeFileSync(path.join(dist, 'robots.txt'), `User-agent: *\nDisallow: /admin/\n\nSitemap: ${S.siteUrl}/sitemap.xml\n`);
+const today = new Date().toISOString().slice(0, 10);
+const urls = Object.keys(pages).filter((f) => f !== '404.html' && !f.startsWith('admin/'));
+fs.writeFileSync(path.join(dist, 'sitemap.xml'),
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+  urls.map((f) => `  <url><loc>${S.siteUrl}${f === 'index.html' ? '/' : '/' + f}</loc><lastmod>${today}</lastmod></url>`).join('\n') + `\n</urlset>\n`);
 
 // Netlify reads _headers from the published folder, so security headers also apply to drag-and-drop deploys.
 const csp = `default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;

@@ -2,10 +2,21 @@
   "name": "أونلاين تك",
   "fullName": "مكتب أونلاين تك للخدمات التكنولوجية والتسويقية",
   "tagline": "نربط الكفاءات بالفرص المناسبة",
+  "siteUrl": "https://onlinetech-ym.com",
+  "altName": "Online TC",
   "phones": [
-    { "intl": "+967777554983", "display": "+967 777 554 983" },
-    { "intl": "+967782434643", "display": "+967 782 434 643" },
-    { "intl": "+9676424688", "display": "+967 6 424688" }
+    {
+      "intl": "+967777554983",
+      "display": "+967 777 554 983"
+    },
+    {
+      "intl": "+967782434643",
+      "display": "+967 782 434 643"
+    },
+    {
+      "intl": "+9676424688",
+      "display": "+967 6 424688"
+    }
   ],
   "whatsapp": "967777554983",
   "whatsappGroup": "https://chat.whatsapp.com/FuqHe2Hldvo4PHfj8eOFa2",
