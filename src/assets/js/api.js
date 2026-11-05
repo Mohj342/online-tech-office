@@ -65,6 +65,17 @@
       await check(res);
       return res.json();
     },
+    /* update the signed-in user: { data: {name,...} } and/or { password, nonce } */
+    updateUser: async function (body, token) {
+      var res = await fetch(C.SUPABASE_URL + '/auth/v1/user', { method: 'PUT', headers: headers(token), body: JSON.stringify(body) });
+      await check(res);
+      return res.json();
+    },
+    /* emails a one-time confirmation code (nonce) to the signed-in user */
+    reauthenticate: async function (token) {
+      var res = await fetch(C.SUPABASE_URL + '/auth/v1/reauthenticate', { headers: headers(token) });
+      await check(res);
+    },
     refresh: async function (refreshToken) {
       var res = await fetch(C.SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
         method: 'POST',

@@ -23,7 +23,6 @@ const BUILD = (() => {
 })();
 const asset = (p) => `${p}?v=${BUILD}`;
 const CSS = fs.readFileSync(path.join(here, 'assets/css/style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n+/g, '\n').trim();
-const CSS_HASH = crypto.createHash('sha256').update(CSS).digest('base64');
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const svcUrl = (s) => `/services/${s.slug}.html`;
@@ -43,8 +42,25 @@ const ICON = {
 };
 const icon = (k, size = 26) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
-const logoImg = (cls = 'logo') =>
-  `<img class="${cls}"${cls === 'hero-logo' ? ' fetchpriority="high"' : ''} src="${asset('/assets/img/logo.svg')}" alt="${esc(S.fullName)}" width="2190" height="823">`;
+const logoImg = (cls = 'logo', dual = true) => {
+  const base = `class="${cls}${dual ? ' logo-l' : ''}"${cls === 'hero-logo' ? ' fetchpriority="high"' : ''} src="${asset('/assets/img/logo.svg')}" alt="${esc(S.fullName)}" width="2190" height="823"`;
+  const dark = dual ? `<img class="${cls} logo-d" src="${asset('/assets/img/logo-dark.svg')}" alt="${esc(S.fullName)}" width="2190" height="823" loading="lazy" decoding="async">` : '';
+  return `<img ${base}>${dark}`;
+};
+
+/* ---------- theme (light / dark / follow the device) ---------- */
+// theme-init.js runs in <head> before first paint so there is no flash. Public pages inline it (no CSP there); /admin loads it as a file so its CSP needs no hashes.
+const THEME_INIT = fs.readFileSync(path.join(here, 'assets/js/theme-init.js'), 'utf8').trim();
+const THEME_SVG = (cls, d) => `<svg class="${cls}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const I_LIGHT = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+const I_DARK = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+const I_AUTO = '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>';
+const THEME_CTL = `<div class="theme"><button class="theme-btn" type="button" id="themeBtn" aria-haspopup="true" aria-expanded="false" aria-controls="themeMenu" aria-label="مظهر الموقع">${THEME_SVG('i-light', I_LIGHT)}${THEME_SVG('i-dark', I_DARK)}${THEME_SVG('i-auto', I_AUTO)}</button>
+<div class="theme-menu" id="themeMenu" role="group" aria-label="مظهر الموقع" hidden>
+<button type="button" data-theme-set="light">${THEME_SVG('', I_LIGHT)} فاتح</button>
+<button type="button" data-theme-set="dark">${THEME_SVG('', I_DARK)} داكن</button>
+<button type="button" data-theme-set="auto">${THEME_SVG('', I_AUTO)} تلقائي (حسب جهازك)</button>
+</div></div>`;
 
 /* ---------- shared layout ---------- */
 const NAV = [
@@ -100,15 +116,16 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
   }
   const nav = NAV.map(([t, u]) => `<a href="${u}"${u === url ? ' aria-current="page"' : ''}>${t}</a>`).join('');
   const header = minimal
-    ? `<header class="site-header"><div class="container bar"><a class="brand" href="/index.html">${logoImg()}</a><span class="brand-note">لوحة الإدارة</span></div></header>`
+    ? `<header class="site-header"><div class="container bar"><a class="brand" href="/index.html">${logoImg()}</a><div class="bar-end"><span class="brand-note">لوحة الإدارة</span>${THEME_CTL}</div></div></header>`
     : `<header class="site-header"><div class="container bar">
   <a class="brand" href="/index.html" aria-label="${esc(S.name)} — الرئيسية">${logoImg()}</a>
-  <button class="menu-btn" type="button" id="menuBtn" aria-expanded="false" aria-controls="nav"><span class="sr">القائمة</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <nav class="nav" id="nav" aria-label="القائمة الرئيسية">${nav}<button class="btn btn-primary btn-sm" type="button" data-open-chat>تحدث معنا</button></nav>
+  <div class="bar-end">${THEME_CTL}
+  <button class="menu-btn" type="button" id="menuBtn" aria-expanded="false" aria-controls="nav"><span class="sr">القائمة</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
 </div></header>`;
   const footer = minimal ? '' : `<footer class="site-footer">
   <div class="container foot-grid">
-    <div><span class="foot-plate">${logoImg('foot-logo')}</span><p>${esc(S.tagline)}.</p></div>
+    <div><span class="foot-plate">${logoImg('foot-logo', false)}</span><p>${esc(S.tagline)}.</p></div>
     <div><h2>أقسامنا</h2><ul>${SV.map((s) => `<li><a href="${svcUrl(s)}">${esc(s.title)}</a></li>`).join('')}</ul></div>
     <div><h2>تواصل معنا</h2><ul>
       ${S.phones.map((p) => `<li class="num">${tel(p)}</li>`).join('')}
@@ -121,7 +138,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
   </div>
   <div class="container foot-bottom">© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</div>
 </footer>`;
-  const scriptTags = ['/assets/js/config.js', '/assets/js/api.js']
+  const scriptTags = ['/assets/js/theme.js', '/assets/js/config.js', '/assets/js/api.js']
     .concat(minimal ? [] : ['/assets/js/nav.js'])
     .concat(body.includes('data-table=') ? ['/assets/js/forms.js'] : [])
     .concat(scripts)
@@ -148,7 +165,7 @@ ${noindex ? '<meta name="robots" content="noindex, nofollow">\n' : `<link rel="c
 <link rel="apple-touch-icon" href="${asset('/assets/img/apple-touch-icon.png')}">
 <link rel="preload" href="/assets/fonts/plex-ar-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/reem-ar-700.woff2" as="font" type="font/woff2" crossorigin>
-<style>${CSS}</style>
+${minimal ? `<script src="${asset('/assets/js/theme-init.js')}"></script>\n<link rel="stylesheet" href="${asset('/assets/css/style.css')}">` : `<script>${THEME_INIT}</script>\n<style>${CSS}</style>`}
 ${ld}${ld2}</head>
 <body>
 <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
@@ -460,7 +477,7 @@ pages['admin/index.html'] = layout({
     </form>
   </section>
   <section id="dash" hidden>
-    <div class="admin-top"><h1>لوحة الإدارة</h1><div><span id="who"></span> <button class="btn btn-ghost btn-sm" type="button" id="logout">تسجيل الخروج</button></div></div>
+    <div class="admin-top"><h1>لوحة الإدارة</h1><div class="admin-who"><span id="who"></span> <button class="btn btn-ghost btn-sm" type="button" id="gear" aria-label="الإعدادات"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg> <span>الإعدادات</span></button> <button class="btn btn-ghost btn-sm" type="button" id="logout">تسجيل الخروج</button></div></div>
     <div class="tabs" id="tabs" role="group" aria-label="الأقسام"></div>
     <div class="form-msg ok" id="note" role="status" aria-live="polite" hidden></div>
     <div id="view"></div>
@@ -472,7 +489,6 @@ pages['admin/index.html'] = layout({
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 fs.cpSync(path.join(here, 'assets'), path.join(dist, 'assets'), { recursive: true });
-fs.rmSync(path.join(dist, 'assets/css'), { recursive: true, force: true }); // CSS is inlined in each page
 
 for (const [file, html] of Object.entries(pages)) {
   const out = path.join(dist, file);
@@ -500,7 +516,7 @@ fs.writeFileSync(path.join(dist, 'sitemap.xml'),
 
 // Strict CSP is applied to the admin area only: PageSpeed Insights injects its own inline style/script into public pages and logs CSP violations that cost 8 Best-Practices points.
 // Netlify reads _headers from the published folder, so security headers also apply to drag-and-drop deploys.
-const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'sha256-${CSS_HASH}'; font-src 'self'; img-src 'self' data:; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
+const csp = `default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
 fs.writeFileSync(path.join(dist, '_headers'), `/*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
