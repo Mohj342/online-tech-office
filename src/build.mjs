@@ -498,6 +498,7 @@ fs.writeFileSync(path.join(dist, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
   urls.map((f) => `  <url><loc>${S.siteUrl}${f === 'index.html' ? '/' : '/' + f}</loc><lastmod>${today}</lastmod></url>`).join('\n') + `\n</urlset>\n`);
 
+// Strict CSP is applied to the admin area only: PageSpeed Insights injects its own inline style/script into public pages and logs CSP violations that cost 8 Best-Practices points.
 // Netlify reads _headers from the published folder, so security headers also apply to drag-and-drop deploys.
 const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'sha256-${CSS_HASH}'; font-src 'self'; img-src 'self' data:; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
 fs.writeFileSync(path.join(dist, '_headers'), `/*
@@ -505,12 +506,12 @@ fs.writeFileSync(path.join(dist, '_headers'), `/*
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: ${csp}
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 /admin/*
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
+  Content-Security-Policy: ${csp}
 `);
 
 console.log('built', Object.keys(pages).length, 'pages →', dist);
