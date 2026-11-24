@@ -4,8 +4,10 @@
   var S = null;
 
   var STATUS = { new: 'جديد', reviewed: 'تمت المراجعة', contacted: 'تم التواصل', archived: 'مؤرشف' };
+  var SEEKER_STATUS = { new: 'جديد', reviewed: 'قيد المراجعة', contacted: 'تم التواصل', accepted: 'مقبول', rejected: 'مرفوض', archived: 'مؤرشف' };
+  var BUCKET = 'seeker-files';
   var TABS = [
-    { key: 'job_seekers', label: 'الباحثون عن عمل', status: true, cols: [
+    { key: 'job_seekers', label: 'الباحثون عن عمل', status: true, statuses: SEEKER_STATUS, details: true, cols: [
       ['full_name', 'الاسم'], ['qualification', 'المؤهل والتخصص'], ['experience', 'الخبرات'],
       ['desired_job', 'الوظيفة المطلوبة'], ['residence', 'الإقامة'], ['phone', 'الهاتف']] },
     { key: 'employer_requests', label: 'طلبات الموظفين', status: true, cols: [
@@ -66,9 +68,15 @@
   function exportCsv(t, rows) {
     var heads = ['created_at'].concat(t.cols.map(function (c) { return c[0]; }));
     heads.push(t.vacancies ? 'is_published' : 'status');
+    if (t.details) heads.push('details', 'attachments', 'interview_result', 'admin_notes');
     var lines = [heads.map(csvCell).join(',')];
     rows.forEach(function (r) {
-      lines.push(heads.map(function (h) { return csvCell(r[h]); }).join(','));
+      lines.push(heads.map(function (h) {
+        if (h === 'details') return csvCell((r.details || []).map(function (d) { return d.l + ': ' + d.v; }).join(' | '));
+        if (h === 'attachments') return csvCell((r.attachments || []).map(function (a) { return (a.label || a.kind) + ': ' + a.name; }).join(' | '));
+        if (h === 'status' && t.statuses) return csvCell(t.statuses[r.status] || r.status);
+        return csvCell(r[h]);
+      }).join(','));
     });
     var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
@@ -186,8 +194,9 @@
       } else {
         var sel = el('select', 'sel');
         sel.setAttribute('aria-label', 'الحالة');
-        Object.keys(STATUS).forEach(function (k) {
-          var o = el('option', null, STATUS[k]);
+        var SM = t.statuses || STATUS;
+        Object.keys(SM).forEach(function (k) {
+          var o = el('option', null, SM[k]);
           o.value = k;
           if (r.status === k) o.selected = true;
           sel.appendChild(o);
@@ -209,6 +218,25 @@
         act.appendChild(wa);
         act.appendChild(document.createTextNode(' '));
       }
+      var detRow = null;
+      if (t.details) {
+        var nf = (r.attachments || []).length;
+        var more = el('button', 'btn btn-primary btn-sm', 'التفاصيل' + (nf ? ' 📎' + nf : ''));
+        more.type = 'button';
+        more.setAttribute('aria-expanded', 'false');
+        more.addEventListener('click', function () {
+          if (detRow) { detRow.remove(); detRow = null; more.setAttribute('aria-expanded', 'false'); return; }
+          detRow = el('tr', 'det-row');
+          var td = el('td');
+          td.colSpan = t.cols.length + 3;
+          td.appendChild(seekerDetails(r));
+          detRow.appendChild(td);
+          tr.after(detRow);
+          more.setAttribute('aria-expanded', 'true');
+        });
+        act.appendChild(more);
+        act.appendChild(document.createTextNode(' '));
+      }
       var del = el('button', 'btn btn-ghost btn-sm danger', 'حذف');
       del.type = 'button';
       var armed = false, timer = null;
@@ -220,7 +248,12 @@
           return;
         }
         clearTimeout(timer);
-        try { await OTAPI.remove(t.key, r.id, await token()); loadTab(); }
+        try {
+          var paths = (r.attachments || []).map(function (a) { return a.path; });
+          if (paths.length) { try { await OTAPI.removeFiles(BUCKET, paths, await token()); } catch (e2) {} }
+          await OTAPI.remove(t.key, r.id, await token());
+          loadTab();
+        }
         catch (e) { note('تعذّر الحذف.', 'err'); armed = false; del.textContent = 'حذف'; }
       });
       act.appendChild(del);
@@ -230,6 +263,68 @@
     table.appendChild(tb);
     wrap.appendChild(table);
     view.appendChild(wrap);
+  }
+
+  /* ---------- applicant details: answers, files (signed links), interview result, notes ---------- */
+  function seekerDetails(r) {
+    var box = el('div', 'det');
+
+    var d = r.details || [];
+    if (d.length) {
+      var h = el('h4', null, 'بيانات الاستمارة');
+      var dl = el('dl');
+      d.forEach(function (x) { dl.appendChild(el('dt', null, x.l)); dl.appendChild(el('dd', null, x.v)); });
+      dl.appendChild(el('dt', null, 'الإقرار'));
+      dl.appendChild(el('dd', null, r.consent ? 'وافق المتقدم على صحة البيانات واستخدامها لأغراض التوظيف' : '—'));
+      box.appendChild(h); box.appendChild(dl);
+    } else {
+      box.appendChild(el('p', 'vac-empty', 'هذا الطلب من النموذج القديم، ولا توجد بيانات إضافية.'));
+    }
+
+    var files = r.attachments || [];
+    var fw = el('div');
+    fw.appendChild(el('h4', null, 'المرفقات (' + files.length + ')'));
+    if (!files.length) fw.appendChild(el('p', 'vac-empty', 'لم يرفق المتقدم ملفات.'));
+    var fl = el('div', 'files');
+    files.forEach(function (a) {
+      [['فتح', false], ['تحميل', true]].forEach(function (m) {
+        var b = el('button', 'btn btn-ghost btn-sm', m[0] + ': ' + (a.label || a.kind) + (m[1] ? '' : ' — ' + a.name));
+        b.type = 'button';
+        b.addEventListener('click', async function () {
+          var w = m[1] ? null : window.open('', '_blank');
+          try {
+            var u = await OTAPI.signUrl(BUCKET, a.path, await token(), m[1]);
+            if (w) { w.opener = null; w.location.href = u; } else location.href = u;
+          } catch (e) { if (w) w.close(); note('تعذّر فتح الملف.', 'err'); }
+        });
+        fl.appendChild(b);
+      });
+    });
+    fw.appendChild(fl);
+    box.appendChild(fw);
+
+    var f = el('form', 'form');
+    f.appendChild(el('h4', null, 'متابعة الطلب'));
+    var l1 = el('label', null, 'نتيجة المقابلة الشخصية');
+    var i1 = el('input'); i1.type = 'text'; i1.maxLength = 500; i1.value = r.interview_result || '';
+    var l2 = el('label', null, 'ملاحظات مسؤول التوظيف');
+    var i2 = el('textarea'); i2.maxLength = 4000; i2.value = r.admin_notes || '';
+    var uid = 'd' + r.id.slice(0, 8);
+    i1.id = uid + 'i'; l1.htmlFor = i1.id; i2.id = uid + 'n'; l2.htmlFor = i2.id;
+    [l1, i1, l2, i2].forEach(function (x) { f.appendChild(x); });
+    var sv = el('button', 'btn btn-primary btn-sm', 'حفظ المتابعة');
+    sv.type = 'submit';
+    f.appendChild(sv);
+    f.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      sv.disabled = true;
+      var body = { interview_result: i1.value.trim() || null, admin_notes: i2.value.trim() || null };
+      try { await OTAPI.patch('job_seekers', r.id, body, await token()); r.interview_result = body.interview_result; r.admin_notes = body.admin_notes; note('تم حفظ المتابعة.', 'ok'); }
+      catch (err) { note('تعذّر حفظ المتابعة.', 'err'); }
+      finally { sv.disabled = false; }
+    });
+    box.appendChild(f);
+    return box;
   }
 
   function vacancyForm() {

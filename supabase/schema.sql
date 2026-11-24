@@ -114,3 +114,59 @@ grant select on public.vacancies to anon;
 
 -- To make someone an admin: create their user in Supabase → Authentication → Users, then run:
 --   insert into public.admin_users (user_id) select id from auth.users where email = 'admin@example.com';
+
+-- ===== Migration "job_seekers_full_application_and_files" (2026-11-25) =====
+-- Full multi-step application: extra answers (details), uploaded files (attachments), admin-only review fields.
+create or replace function public.seeker_attachments_ok(a jsonb, rid uuid)
+returns boolean language sql immutable set search_path = '' as $$
+  select jsonb_typeof(a) = 'array'
+     and jsonb_array_length(a) <= 12
+     and not exists (
+       select 1 from jsonb_array_elements(a) e
+       where jsonb_typeof(e) <> 'object'
+          or coalesce(e->>'path', '') not like ('uploads/' || rid::text || '/%')
+          or char_length(coalesce(e->>'name', '')) > 200
+          or char_length(coalesce(e->>'kind', '')) > 40
+     );
+$$;
+
+alter table public.job_seekers
+  add column details jsonb not null default '[]'::jsonb,
+  add column attachments jsonb not null default '[]'::jsonb,
+  add column consent boolean not null default false,
+  add column interview_result text,
+  add column admin_notes text;
+
+alter table public.job_seekers
+  add constraint job_seekers_details_check check (jsonb_typeof(details) = 'array' and pg_column_size(details) <= 30000),
+  add constraint job_seekers_attachments_check check (public.seeker_attachments_ok(attachments, id)),
+  add constraint job_seekers_interview_check check (char_length(interview_result) <= 500),
+  add constraint job_seekers_notes_check check (char_length(admin_notes) <= 4000);
+
+alter table public.job_seekers drop constraint job_seekers_status_check;
+alter table public.job_seekers add constraint job_seekers_status_check
+  check (status in ('new','reviewed','contacted','accepted','rejected','archived'));
+
+drop policy seekers_insert on public.job_seekers;
+create policy seekers_insert on public.job_seekers
+  for insert to anon, authenticated
+  with check (status = 'new' and interview_result is null and admin_notes is null);
+
+-- Private bucket for CVs and photos (15 MB per file)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('seeker-files', 'seeker-files', false, 15728640, array[
+  'application/pdf', 'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'
+]);
+
+-- Visitors may only add new files under uploads/<uuid>/ ; they cannot list, read, replace or delete.
+create policy seeker_files_anon_upload on storage.objects
+  for insert to anon, authenticated
+  with check (bucket_id = 'seeker-files' and (storage.foldername(name))[1] = 'uploads');
+create policy seeker_files_admin_read on storage.objects
+  for select to authenticated
+  using (bucket_id = 'seeker-files' and exists (select 1 from public.admin_users a where a.user_id = (select auth.uid())));
+create policy seeker_files_admin_delete on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'seeker-files' and exists (select 1 from public.admin_users a where a.user_id = (select auth.uid())));

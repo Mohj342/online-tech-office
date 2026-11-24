@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { jobApplicationForm } from './jobform.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -239,7 +240,8 @@ const contactSide = () => `<aside class="side">
   </div>
 </aside>`;
 
-const vacanciesBlock = (limit) => `<div id="vacancies" data-limit="${limit}"><p class="vac-empty">جارٍ تحميل الوظائف…</p></div>`;
+// Static fallback is the empty state, so readers/crawlers without JavaScript never see an endless "loading" text; vacancies.js replaces it.
+const vacanciesBlock = (limit) => `<div id="vacancies" data-limit="${limit}" aria-live="polite"><p class="vac-empty">لا توجد وظائف منشورة حاليًا. <a href="/register.html">سجّل بياناتك كباحث عن عمل</a> وسنراجعها عند توفر فرص مناسبة.</p></div>`;
 
 /* ---------- pages ---------- */
 const pages = {};
@@ -280,7 +282,7 @@ pages['index.html'] = layout({
   <h2>التوظيف</h2>
   <p class="sub">للباحثين عن عمل وللجهات الراغبة في توظيف كفاءات.</p>
   <div class="split">
-    <div class="box"><h3>أبحث عن وظيفة</h3><p>سجّل بياناتك ليراجعها المكتب عند توفر فرص وظيفية مناسبة.</p><a class="btn btn-primary" href="/register.html">سجّل بياناتك</a></div>
+    <div class="box"><h3>أبحث عن وظيفة</h3><p>املأ استمارة التوظيف وأرفق سيرتك الذاتية ليراجعها المكتب عند توفر فرص مناسبة.</p><a class="btn btn-primary" href="/register.html">سجّل بياناتك</a></div>
     <div class="box"><h3>أحتاج موظفين</h3><p>أرسل طلب جهتك والوظائف المطلوبة لننسّق معك بخصوص الكفاءات المتاحة.</p><a class="btn btn-primary" href="/employers.html">أرسل طلب موظفين</a></div>
   </div>
 </div></section>
@@ -331,7 +333,7 @@ pages['services/employment.html'] = layout({
   body: `${pageHero({ title: SV[0].title, lead: SV[0].intro, crumbs: [['خدماتنا', '/services.html']] })}
 <section class="section"><div class="container">
   <div class="split">
-    <div class="box"><h2>أبحث عن وظيفة</h2><p>أرسل الاسم الكامل والمؤهل والخبرات والوظيفة المطلوبة ومكان الإقامة ورقم التواصل. سنراجع بياناتك للاستفادة منها عند توفر فرص وظيفية مناسبة.</p><a class="btn btn-primary" href="/register.html">التسجيل كباحث عن عمل</a></div>
+    <div class="box"><h2>أبحث عن وظيفة</h2><p>املأ استمارة طلب التوظيف بياناتك ومؤهلاتك وخبراتك، وأرفق سيرتك الذاتية وشهاداتك. سنراجع طلبك عند توفر فرص وظيفية مناسبة.</p><a class="btn btn-primary" href="/register.html">التسجيل كباحث عن عمل</a></div>
     <div class="box"><h2>طلب موظفين</h2><p>أرسل اسم الجهة والوظائف المطلوبة وعدد كل وظيفة والمؤهلات ومكان العمل ورقم التواصل.</p><a class="btn btn-primary" href="/employers.html">أرسل طلب موظفين</a></div>
   </div>
 </div></section>
@@ -374,25 +376,13 @@ for (const s of SV.slice(1)) {
 
 pages['register.html'] = layout({
   file: 'register.html',
-  title: 'التسجيل كباحث عن عمل',
-  desc: 'سجّل بياناتك كباحث عن عمل في مكتب أونلاين تك لنراجعها عند توفر فرص وظيفية مناسبة.',
-  body: `${pageHero({ title: 'التسجيل كباحث عن عمل', lead: 'إذا كنت تبحث عن فرصة عمل، يرجى إرسال بياناتك التالية.', crumbs: [['التوظيف', '/services/employment.html']] })}
+  title: 'استمارة طلب توظيف',
+  desc: 'استمارة طلب توظيف في مكتب أونلاين تك: بياناتك ومؤهلاتك وخبراتك، مع إرفاق السيرة الذاتية والصور والشهادات.',
+  scripts: ['/assets/js/seeker.js'],
+  body: `${pageHero({ title: 'استمارة طلب توظيف', lead: 'املأ بياناتك على مراحل، وأرفق سيرتك الذاتية وشهاداتك. نراجع الطلبات ونتواصل معك عند توفر فرصة مناسبة.', crumbs: [['التوظيف', '/services/employment.html']] })}
 <section class="section"><div class="container layout2">
   <div class="panel">
-    <h2>بياناتك</h2>
-    <p>سنراجع بياناتك للاستفادة منها عند توفر فرص وظيفية مناسبة.</p>
-    ${formBlock({
-      table: 'job_seekers',
-      submit: 'إرسال البيانات',
-      fields: [
-        field('full_name', 'الاسم الكامل', { req: 1, max: 120, ac: 'name' }),
-        field('qualification', 'المؤهل العلمي والتخصص', { req: 1, max: 200 }),
-        field('experience', 'الخبرات السابقة', { textarea: 1, max: 2000 }),
-        field('desired_job', 'الوظيفة المطلوبة', { req: 1, max: 150 }),
-        field('residence', 'مكان الإقامة', { req: 1, max: 120, ac: 'address-level2' }),
-        field('phone', 'رقم التواصل', { type: 'tel', req: 1, max: 30, ac: 'tel' })
-      ]
-    })}
+    ${jobApplicationForm()}
   </div>
   ${contactSide()}
 </div></section>`

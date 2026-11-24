@@ -56,6 +56,34 @@
       });
       await check(res);
     },
+    /* private file storage: visitors may only add new files; admins read through short-lived signed links */
+    upload: async function (bucket, path, file, type) {
+      var res = await fetch(C.SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + path, {
+        method: 'POST',
+        headers: { apikey: C.SUPABASE_KEY, Authorization: 'Bearer ' + C.SUPABASE_KEY, 'Content-Type': type || 'application/octet-stream', 'x-upsert': 'false', 'cache-control': '3600' },
+        body: file
+      });
+      await check(res);
+    },
+    signUrl: async function (bucket, path, token, download) {
+      var res = await fetch(C.SUPABASE_URL + '/storage/v1/object/sign/' + bucket + '/' + path, {
+        method: 'POST',
+        headers: headers(token),
+        body: JSON.stringify({ expiresIn: 600 })
+      });
+      await check(res);
+      var j = await res.json();
+      var u = C.SUPABASE_URL + '/storage/v1' + (j.signedURL || j.signedUrl);
+      return download ? u + (u.indexOf('?') < 0 ? '?' : '&') + 'download=' : u;
+    },
+    removeFiles: async function (bucket, paths, token) {
+      var res = await fetch(C.SUPABASE_URL + '/storage/v1/object/' + bucket, {
+        method: 'DELETE',
+        headers: headers(token),
+        body: JSON.stringify({ prefixes: paths })
+      });
+      await check(res);
+    },
     login: async function (email, password) {
       var res = await fetch(C.SUPABASE_URL + '/auth/v1/token?grant_type=password', {
         method: 'POST',
