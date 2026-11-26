@@ -568,3 +568,8 @@ a.partner:hover{border-color:var(--teal)}
 .form input:focus,.form textarea:focus,.form select:focus,.det textarea:focus,.det input:focus,.bar2 .search:focus{border-color:var(--teal);outline:none;box-shadow:0 0 0 3px var(--teal-l)}
 .check input{accent-color:var(--teal)}
 .rating label{color:var(--field-line)}
+
+/* footer: light logo straight on the dark band (no white plate); bottom bar = copyright one side, links the other; centred on phones */
+.foot-logo{display:block;height:46px;width:auto;margin-bottom:10px}
+.foot-bottom{align-items:center}
+@media (max-width:760px){.foot-bottom{flex-direction:column;justify-content:center;text-align:center;padding-bottom:88px}.foot-links{justify-content:center}}

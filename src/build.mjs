@@ -144,7 +144,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
 </div></header>`;
   const footer = minimal ? '' : `<footer class="site-footer">
   <div class="container foot-grid">
-    <div><span class="foot-plate">${logoImg('foot-logo', false)}</span><p>${esc(S.tagline)}.</p></div>
+    <div><img class="foot-logo" src="${asset('/assets/img/logo-dark.svg')}" alt="${esc(S.fullName)}" width="2190" height="823" loading="lazy" decoding="async"><p>${esc(S.tagline)}.</p></div>
     <div><h2>أقسامنا</h2><ul>${SV.map((s) => `<li><a href="${svcUrl(s)}">${esc(s.title)}</a></li>`).join('')}</ul></div>
     <div><h2>تواصل معنا</h2><ul>
       ${S.phones.map((p) => `<li class="num">${tel(p)}</li>`).join('')}
