@@ -455,3 +455,18 @@ create policy site_media_admin_update on storage.objects for update to authentic
   using (bucket_id = 'site-media' and (select public.is_admin()));
 create policy site_media_admin_delete on storage.objects for delete to authenticated
   using (bucket_id = 'site-media' and (select public.is_admin()));
+
+-- ===== Migration "trust_content_split_read_policies" (2026-11-26) =====
+-- Visitors (anon) can't execute is_admin(), so public read policies must not call it: one policy per role.
+drop policy works_read on public.works;
+drop policy partners_read on public.partners;
+drop policy news_read on public.news;
+drop policy reviews_read on public.reviews;
+create policy works_public_read    on public.works    for select to anon using (is_published);
+create policy partners_public_read on public.partners for select to anon using (is_published);
+create policy news_public_read     on public.news     for select to anon using (is_published);
+create policy reviews_public_read  on public.reviews  for select to anon using (status = 'approved');
+create policy works_auth_read    on public.works    for select to authenticated using (is_published or (select public.is_admin()));
+create policy partners_auth_read on public.partners for select to authenticated using (is_published or (select public.is_admin()));
+create policy news_auth_read     on public.news     for select to authenticated using (is_published or (select public.is_admin()));
+create policy reviews_auth_read  on public.reviews  for select to authenticated using (status = 'approved' or (select public.is_admin()));
