@@ -89,6 +89,14 @@
       });
       await check(res);
     },
+    uploadAuth: async function (bucket, path, file, type, token) {
+      var res = await fetch(C.SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + path, {
+        method: 'POST',
+        headers: { apikey: C.SUPABASE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': type || 'application/octet-stream', 'x-upsert': 'false', 'cache-control': '31536000' },
+        body: file
+      });
+      await check(res);
+    },
     signUrl: async function (bucket, path, token, download) {
       var res = await fetch(C.SUPABASE_URL + '/storage/v1/object/sign/' + bucket + '/' + path, {
         method: 'POST',

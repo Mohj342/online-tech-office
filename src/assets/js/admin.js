@@ -32,6 +32,10 @@
     { key: 'vacancies', label: 'الوظائف المنشورة', vacancies: true, cols: [
       ['title', 'المسمى'], ['company', 'الجهة'], ['location', 'المكان'], ['job_type', 'النوع'],
       ['description', 'الوصف'], ['requirements', 'المتطلبات']] },
+    { key: 'reviews', label: 'آراء العملاء', cms: true },
+    { key: 'works', label: 'أعمالنا', cms: true },
+    { key: 'partners', label: 'الشركاء', cms: true },
+    { key: 'news', label: 'الأخبار', cms: true },
     { key: 'settings', label: 'الإعدادات', settings: true }
   ];
   var BGS = [
@@ -151,8 +155,9 @@
     if (t.settings) { renderSettings(); return; }
     view.textContent = 'جارٍ التحميل…';
     try {
-      var rows = await OTAPI.select(t.key, 'select=*&order=created_at.desc&limit=300', await token());
+      var rows = await OTAPI.select(t.key, 'select=*&order=' + (t.cms ? OTCMS.order(t.key) : 'created_at.desc') + '&limit=300', await token());
       if (t !== tab) return;
+      if (t.cms) { OTCMS.render(view, t, rows, { token: token, note: note, reload: loadTab }); return; }
       render(t, rows);
     } catch (err) {
       if (err.status === 401 || err.status === 403) { clear(); showLogin('انتهت الجلسة. سجّل الدخول من جديد.'); return; }

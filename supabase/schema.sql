@@ -364,3 +364,94 @@ begin
 end $$;
 revoke execute on function public.track_request(text, text) from public;
 grant execute on function public.track_request(text, text) to anon, authenticated;
+
+-- ===== Migration "trust_content" (2026-11-26) =====
+-- Trust content: portfolio (works), partners, customer reviews, news. Admin-managed; visitors read published items only.
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.admin_users a where a.user_id = (select auth.uid()));
+$$;
+revoke execute on function public.is_admin() from public, anon;
+grant execute on function public.is_admin() to authenticated;
+
+create table public.works (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 2 and 150),
+  category text not null check (category in ('employment','students','design','marketing','events','travel','realestate','office')),
+  description text check (char_length(description) <= 1500),
+  client text check (char_length(client) <= 120),
+  image_path text check (char_length(image_path) <= 300),
+  sort int not null default 0,
+  is_published boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create table public.partners (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 2 and 150),
+  field text check (char_length(field) <= 120),
+  url text check (url ~ '^https?://' and char_length(url) <= 300),
+  logo_path text check (char_length(logo_path) <= 300),
+  sort int not null default 0,
+  is_published boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create table public.news (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 2 and 200),
+  body text not null check (char_length(body) between 2 and 5000),
+  image_path text check (char_length(image_path) <= 300),
+  is_published boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create table public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 2 and 80),
+  city text check (char_length(city) <= 60),
+  service text check (char_length(service) <= 80),
+  rating smallint not null check (rating between 1 and 5),
+  body text not null check (char_length(body) between 10 and 1000),
+  ref text check (ref ~ '^OT-[0-9]{6}$'),
+  phone text check (char_length(phone) between 6 and 30),
+  consent boolean not null default false,
+  status text not null default 'pending' check (status in ('pending','approved','hidden')),
+  created_at timestamptz not null default now()
+);
+create index works_pub_idx on public.works (is_published, sort, created_at desc);
+create index partners_pub_idx on public.partners (is_published, sort);
+create index news_pub_idx on public.news (is_published, created_at desc);
+create index reviews_status_idx on public.reviews (status, created_at desc);
+
+alter table public.works enable row level security;
+alter table public.partners enable row level security;
+alter table public.news enable row level security;
+alter table public.reviews enable row level security;
+
+-- public reads (published / approved only)
+create policy works_read on public.works for select to anon, authenticated using (is_published or (select public.is_admin()));
+create policy partners_read on public.partners for select to anon, authenticated using (is_published or (select public.is_admin()));
+create policy news_read on public.news for select to anon, authenticated using (is_published or (select public.is_admin()));
+create policy reviews_read on public.reviews for select to anon, authenticated using (status = 'approved' or (select public.is_admin()));
+-- visitors submit reviews as pending (with consent to publish)
+create policy reviews_insert on public.reviews for insert to anon, authenticated with check (status = 'pending' and consent);
+-- admin write
+create policy works_admin_all on public.works for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy partners_admin_all on public.partners for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy news_admin_all on public.news for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy reviews_admin_update on public.reviews for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy reviews_admin_delete on public.reviews for delete to authenticated using ((select public.is_admin()));
+
+revoke all on public.works, public.partners, public.news, public.reviews from anon;
+grant select on public.works, public.partners, public.news to anon;
+-- reviewers' phone and request number stay private: anon may read only these columns
+grant select (id, name, city, service, rating, body, created_at) on public.reviews to anon;
+grant insert (name, city, service, rating, body, ref, phone, consent) on public.reviews to anon;
+
+-- Public bucket for site images (portfolio, partner logos, news); only admins can write
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('site-media', 'site-media', true, 5242880, array['image/jpeg','image/png','image/webp']);
+create policy site_media_admin_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'site-media' and (select public.is_admin()));
+create policy site_media_admin_update on storage.objects for update to authenticated
+  using (bucket_id = 'site-media' and (select public.is_admin()));
+create policy site_media_admin_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'site-media' and (select public.is_admin()));

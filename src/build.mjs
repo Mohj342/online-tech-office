@@ -28,6 +28,22 @@ const CSS = fs.readFileSync(path.join(here, 'assets/css/style.css'), 'utf8').rep
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const svcUrl = (s) => `/services/${s.slug}.html`;
+
+// Illustrative images (AI-generated, 16:9 WebP in 640/1280 widths). Frames crop to their own aspect ratio, so any image fits.
+const AI_ALT = {
+  employment: 'مقابلة توظيف ومصافحة بين باحث عن عمل وصاحب عمل',
+  students: 'طالب يستلم بحثه المطبوع والمجلّد من موظفة الخدمات الطلابية',
+  design: 'مصممة تعمل على هوية بصرية ومطبوعات إعلانية',
+  marketing: 'هاتف يعرض منشورات تسويقية وحاسوب يعرض نمو الأداء',
+  events: 'قاعة احتفالات مزينة بالكوشة والزهور والإضاءة',
+  travel: 'طائرة تقلع وقت الغروب وحقيبة سفر عليها جواز وتذكرة',
+  realestate: 'يد تحمل مفاتيح منزل أمام فيلا وعمارة سكنية حديثة',
+  'office-service': 'موظفة خدمة عملاء تستقبل عميلًا وتساعده في طلبه'
+};
+function aiImg(key, { eager = false, sizes = '(max-width: 760px) 100vw, 50vw', cls = '' } = {}) {
+  const b = `/assets/img/ai/${key}`;
+  return `<img class="${cls}" src="${b}-1280.webp" srcset="${b}-640.webp 640w, ${b}-1280.webp 1280w" sizes="${sizes}" width="1280" height="720" alt="${esc(AI_ALT[key] || '')}"${eager ? ' fetchpriority="high"' : ' loading="lazy"'} decoding="async">`;
+}
 const nb = (s) => s.replace(/ /g, ' '); // keep each number on one line
 const tel = (p) => `<a href="tel:${p.intl}" dir="ltr">${nb(p.display)}</a>`;
 const ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع'];
@@ -139,7 +155,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
       <li><a href="/employers.html">طلب موظفين</a></li>
     </ul></div>
   </div>
-  <div class="container foot-bottom"><span>© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</span><nav class="foot-links" aria-label="روابط السياسات"><a href="/track.html">تابع طلبك</a><a href="/faq.html">الأسئلة الشائعة</a><a href="/privacy.html">سياسة الخصوصية</a><a href="/terms.html">شروط الاستخدام</a></nav></div>
+  <div class="container foot-bottom"><span>© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</span><nav class="foot-links" aria-label="روابط السياسات"><a href="/track.html">تابع طلبك</a><a href="/works.html">أعمالنا</a><a href="/reviews.html">آراء العملاء</a><a href="/news.html">الأخبار والإعلانات</a><a href="/faq.html">الأسئلة الشائعة</a><a href="/privacy.html">سياسة الخصوصية</a><a href="/terms.html">شروط الاستخدام</a></nav></div>
 </footer>`;
   const scriptTags = ['/assets/js/theme.js', '/assets/js/config.js', '/assets/js/api.js']
     .concat(minimal ? [] : ['/assets/js/nav.js'])
@@ -195,8 +211,8 @@ function field(name, label, o = {}) {
   return `<div class="field"><label for="${id}">${label}${star}</label>${ctl}</div>`;
 }
 
-function formBlock({ table, fields, submit, hidden = '' }) {
-  return `<form class="form" data-table="${table}" aria-label="${esc(submit)}">
+function formBlock({ table, fields, submit, hidden = '', plain = false, ok = '' }) {
+  return `<form class="form" data-table="${table}"${plain ? ' data-plain' : ''}${ok ? ` data-ok="${esc(ok)}"` : ''} aria-label="${esc(submit)}">
   ${hidden}
   ${fields.join('\n  ')}
   <div class="hp" aria-hidden="true"><label>لا تملأ هذا الحقل<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
@@ -205,17 +221,23 @@ function formBlock({ table, fields, submit, hidden = '' }) {
 </form>`;
 }
 
-function pageHero({ title, lead, crumbs = [] }) {
+function pageHero({ title, lead, crumbs = [], img = '' }) {
   const trail = [['الرئيسية', '/index.html'], ...crumbs].map(([t, u]) => `<a href="${u}">${esc(t)}</a>`).join(' / ');
-  return `<section class="page-hero"><div class="container">
-  <div class="crumbs">${trail}</div>
+  const text = `<div class="crumbs">${trail}</div>
   <h1>${esc(title)}</h1>
-  ${lead ? `<p>${esc(lead)}</p>` : ''}
+  ${lead ? `<p>${esc(lead)}</p>` : ''}`;
+  if (!img) return `<section class="page-hero"><div class="container">
+  ${text}
+</div></section>`;
+  return `<section class="page-hero has-img"><div class="container hero-split">
+  <div class="hero-text">${text}</div>
+  <figure class="frame hero-frame">${aiImg(img, { eager: true, sizes: '(max-width: 760px) 100vw, 46vw' })}</figure>
 </div></section>`;
 }
 
 function serviceCards() {
-  return `<div class="cards">${SV.map((s, i) => `<a class="card${i === 0 ? ' feat' : ''}" href="${svcUrl(s)}">
+  return `<div class="cards">${SV.map((s, i) => `<a class="card has-media${i === 0 ? ' feat' : ''}" href="${svcUrl(s)}">
+  <span class="card-media">${aiImg(s.slug, { sizes: i === 0 ? '(max-width: 560px) 100vw, (max-width: 1000px) 100vw, 50vw' : '(max-width: 560px) 100vw, (max-width: 1000px) 50vw, 25vw' })}</span>
   <span class="ico-wrap">${icon(s.slug, 28)}</span>
   <h3>${esc(s.title)}</h3>
   <p>${esc(s.short)}</p>
@@ -254,7 +276,7 @@ pages['index.html'] = layout({
   file: 'index.html',
   title: S.name,
   desc: `${S.fullName}: التوظيف، الخدمات الطلابية، الدعاية والتصميم، التسويق الإلكتروني، تعهد الحفلات، السفريات والسياحة، والخدمات العقارية.`,
-  scripts: ['/assets/js/vacancies.js'],
+  scripts: ['/assets/js/vacancies.js', '/assets/js/feeds.js'],
   body: `<section class="hero"><div class="container">
   <h1 class="sr">${esc(S.fullName)}</h1>
   ${logoImg('hero-logo')}
@@ -280,6 +302,36 @@ pages['index.html'] = layout({
     <li><span class="n">2</span><h3>نراجع طلبك</h3><p>يطّلع فريق المكتب على طلبك ويتواصل معك.</p></li>
     <li><span class="n">3</span><h3>نتفق على التفاصيل</h3><p>نوضح لك الخدمة المتاحة ونرتب الخطوات التالية معك.</p></li>
   </ol>
+</div></section>
+
+<section class="section why"><div class="container">
+  <h2>لماذا أونلاين تك؟</h2>
+  <p class="sub">مكتب واحد يختصر عليك المشاوير، ويتابع طلبك حتى يكتمل.</p>
+  <ul class="why-grid">
+    <li><span class="why-ico" aria-hidden="true">🧭</span><h3>سبعة أقسام في مكان واحد</h3><p>من التوظيف والطباعة إلى السفر والعقار والمناسبات، بدون ما تلف على أكثر من جهة.</p></li>
+    <li><span class="why-ico" aria-hidden="true">🔎</span><h3>تابع طلبك برقمه</h3><p>كل طلب ياخذ رقمًا، وتقدر تعرف حالته في أي وقت من صفحة «تابع طلبك».</p></li>
+    <li><span class="why-ico" aria-hidden="true">🔒</span><h3>بياناتك في أمان</h3><p>ملفاتك وبياناتك محفوظة بخصوصية، ولا يطّلع عليها إلا فريق المكتب المختص.</p></li>
+    <li><span class="why-ico" aria-hidden="true">🤝</span><h3>تواصل مباشر وسريع</h3><p>اتصال وواتساب ومحادثة في الموقع، وفريق يرد عليك ويتابع معك.</p></li>
+  </ul>
+</div></section>
+
+<section class="section alt" data-feed-section hidden><div class="container">
+  <h2>من أعمالنا</h2>
+  <p class="sub">نماذج من مشاريع وخدمات نفذها المكتب.</p>
+  <div class="works-grid" data-feed="works" data-limit="6"></div>
+  <p class="after"><a class="btn btn-ghost" href="/works.html">كل الأعمال</a></p>
+</div></section>
+
+<section class="section" data-feed-section hidden><div class="container">
+  <h2>آراء عملائنا</h2>
+  <p class="sub">تجارب حقيقية من عملاء تعاملوا مع المكتب.</p>
+  <div class="reviews-grid" data-feed="reviews" data-limit="3"></div>
+  <p class="after"><a class="btn btn-ghost" href="/reviews.html">كل الآراء وأضف رأيك</a></p>
+</div></section>
+
+<section class="section alt" data-feed-section hidden><div class="container">
+  <h2>شركاء النجاح</h2>
+  <div class="partners-grid" data-feed="partners" data-limit="12"></div>
 </div></section>
 
 <section class="section"><div class="container">
@@ -309,11 +361,13 @@ const docSections = (secs) => secs.map(([h, ps]) => `<h2>${esc(h)}</h2><ul class
 
 pages['about.html'] = layout({
   file: 'about.html',
+  scripts: ['/assets/js/feeds.js'],
   title: 'من نحن',
   desc: `${S.fullName} في ذمار: رسالتنا ورؤيتنا وقيمنا وكلمة الإدارة ومجالات الشراكة. ${S.tagline}.`,
   body: `${pageHero({ title: 'من نحن', lead: ABOUT.lead, crumbs: [] })}
 <section class="section"><div class="container layout2">
   <div class="panel prose">
+    <figure class="frame about-frame">${aiImg('office-service', { sizes: '(max-width: 900px) 100vw, 60vw' })}</figure>
     <h2>نبذة عنا</h2>
     ${ABOUT.intro.map((p) => `<p>${esc(p)}</p>`).join('')}
     <p class="tagline-quote">${esc(S.tagline)}.</p>
@@ -349,9 +403,16 @@ pages['about.html'] = layout({
   </article>
 </div></section>
 
+<section class="section" id="office" data-feed-section hidden><div class="container">
+  <h2>المكتب وفريق العمل</h2>
+  <p class="sub">جولة في مكتبنا وفريقنا.</p>
+  <div class="works-grid" data-feed="works" data-category="office" data-limit="12"></div>
+</div></section>
+
 <section class="section alt" id="partners"><div class="container">
   <h2>شركاء النجاح والتطوير</h2>
   <p class="sub">${esc(ABOUT.partners.lead)}</p>
+  <div class="partners-grid feed-gap" data-feed="partners" data-limit="40"></div>
   <ul class="fields">${listItems(ABOUT.partners.fields)}</ul>
   <div class="after btn-row"><strong class="closing">${esc(ABOUT.partners.closing)}</strong><a class="btn btn-primary" href="/contact.html">تواصل معنا للشراكة</a></div>
 </div></section>`
@@ -370,7 +431,7 @@ pages['services/employment.html'] = layout({
   title: SV[0].title,
   desc: SV[0].intro,
   scripts: ['/assets/js/vacancies.js'],
-  body: `${pageHero({ title: SV[0].title, lead: SV[0].intro, crumbs: [['خدماتنا', '/services.html']] })}
+  body: `${pageHero({ title: SV[0].title, lead: SV[0].intro, crumbs: [['خدماتنا', '/services.html']], img: 'employment' })}
 <section class="section"><div class="container">
   <div class="split">
     <div class="box"><h2>أبحث عن وظيفة</h2><p>املأ استمارة طلب التوظيف بياناتك ومؤهلاتك وخبراتك، وأرفق سيرتك الذاتية وشهاداتك. سنراجع طلبك عند توفر فرص وظيفية مناسبة.</p><a class="btn btn-primary" href="/register.html">التسجيل كباحث عن عمل</a></div>
@@ -397,7 +458,7 @@ for (const s of SV.slice(1)) {
     file: `services/${s.slug}.html`,
     title: s.title,
     desc: intro,
-    body: `${pageHero({ title: s.title, lead: intro, crumbs: [['خدماتنا', '/services.html']] })}
+    body: `${pageHero({ title: s.title, lead: intro, crumbs: [['خدماتنا', '/services.html']], img: s.slug })}
 <section class="section"><div class="container">
   <h2>خدماتنا في هذا القسم</h2>
   <p class="sub">اختر الخدمة التي تحتاجها وأرسل طلبك، أو تواصل معنا مباشرة لنتفق على التفاصيل.</p>
@@ -448,6 +509,68 @@ pages['employers.html'] = layout({
     ${employerRequestForm()}
   </div>
   ${contactSide()}
+</div></section>`
+});
+
+pages['works.html'] = layout({
+  file: 'works.html',
+  title: 'أعمالنا',
+  desc: `نماذج من أعمال ${S.fullName} في التصميم والدعاية والتسويق والمناسبات وغيرها.`,
+  scripts: ['/assets/js/feeds.js'],
+  body: `${pageHero({ title: 'أعمالنا', lead: 'نماذج من المشاريع والخدمات التي نفذها المكتب لعملائه.' })}
+<section class="section"><div class="container">
+  <div class="chip-row" data-filter-for="worksAll" hidden role="group" aria-label="تصفية حسب القسم"></div>
+  <div class="works-grid" id="worksAll" data-feed="works">
+    <div class="empty-state"><span aria-hidden="true">🛠️</span><h2>نجهّز معرض أعمالنا</h2><p>قريبًا نعرض هنا نماذج من أعمالنا. وإلى ذلك الحين، تواصل معنا ونرسل لك نماذج تناسب طلبك.</p><a class="btn btn-primary" href="/contact.html">تواصل معنا</a></div>
+  </div>
+</div></section>`
+});
+
+pages['reviews.html'] = layout({
+  file: 'reviews.html',
+  title: 'آراء العملاء',
+  desc: `آراء وتقييمات عملاء ${S.fullName}، وأضف تقييمك لتجربتك معنا.`,
+  scripts: ['/assets/js/feeds.js'],
+  body: `${pageHero({ title: 'آراء العملاء', lead: 'تجارب حقيقية من عملاء تعاملوا معنا. رأيك يهمنا ويساعدنا نتحسن.' })}
+<section class="section"><div class="container">
+  <div class="review-summary" data-review-summary hidden></div>
+  <div class="reviews-grid" data-feed="reviews">
+    <div class="empty-state"><span aria-hidden="true">⭐</span><h2>كن أول من يقيّم</h2><p>تعاملت مع المكتب؟ شاركنا تجربتك من النموذج بالأسفل.</p></div>
+  </div>
+</div></section>
+<section class="section alt" id="add-review"><div class="container layout2">
+  <div class="panel">
+    <h2>أضف رأيك</h2>
+    <p>يظهر رأيك في الموقع بعد مراجعته من المكتب. لا ننشر رقم جوالك أو رقم طلبك.</p>
+    ${formBlock({
+      table: 'reviews',
+      plain: true,
+      ok: 'شكرًا لك! وصلنا رأيك، وسيظهر في الموقع بعد المراجعة.',
+      submit: 'إرسال التقييم',
+      fields: [
+        `<fieldset class="field rating-field"><legend>تقييمك <span class="req" aria-hidden="true">*</span></legend><div class="rating">${[5, 4, 3, 2, 1].map((n) => `<input type="radio" id="rate${n}" name="rating" value="${n}" required${n === 5 ? ' checked' : ''}><label for="rate${n}" title="${n} من 5"><span class="sr">${n} من 5</span>★</label>`).join('')}</div></fieldset>`,
+        field('name', 'الاسم كما تحب أن يظهر', { req: 1, max: 80, ac: 'name' }),
+        `<div class="grid2">${field('city', 'المدينة', { max: 60, ac: 'address-level2' })}<div class="field"><label for="f_rsvc">الخدمة التي تعاملت معها</label><select id="f_rsvc" name="service"><option value="">اختر…</option>${SV.map((x) => `<option>${esc(x.title)}</option>`).join('')}</select></div></div>`,
+        field('body', 'رأيك وتجربتك', { textarea: 1, req: 1, max: 1000, rows: 4 }),
+        `<div class="grid2">${field('ref', 'رقم الطلب (اختياري)', { max: 12 })}${field('phone', 'رقم الجوال (اختياري، للتحقق فقط)', { type: 'tel', max: 30, ac: 'tel' })}</div>`,
+        `<label class="check"><input type="checkbox" name="consent" required> <span>أوافق على نشر اسمي ورأيي في موقع المكتب.</span></label>`
+      ]
+    })}
+  </div>
+  ${contactSide()}
+</div></section>`
+});
+
+pages['news.html'] = layout({
+  file: 'news.html',
+  title: 'الأخبار والإعلانات',
+  desc: `آخر أخبار وإعلانات ${S.fullName}.`,
+  scripts: ['/assets/js/feeds.js'],
+  body: `${pageHero({ title: 'الأخبار والإعلانات', lead: 'آخر أخبار المكتب وعروضه وإعلاناته.' })}
+<section class="section"><div class="container">
+  <div class="news-list" data-feed="news">
+    <div class="empty-state"><span aria-hidden="true">📣</span><h2>لا توجد أخبار حاليًا</h2><p>تابع قناة الوظائف وصفحتنا على فيسبوك ليصلك كل جديد.</p><div class="btn-row"><a class="btn btn-ghost" href="${S.whatsappGroup}" target="_blank" rel="noopener noreferrer">قناة الوظائف</a><a class="btn btn-ghost" href="${S.facebook}" target="_blank" rel="noopener noreferrer">فيسبوك</a></div></div>
+  </div>
 </div></section>`
 });
 
@@ -522,6 +645,7 @@ pages['contact.html'] = layout({
 <section class="section"><div class="container layout2">
   <div class="panel">
     <h2>أرسل استفسارك</h2>
+    <p>عندك اقتراح يطوّر خدماتنا أو ملاحظة على تجربتك؟ اختر «اقتراح» أو «ملاحظة» من القائمة، فرأيك يهمنا.</p>
     ${formBlock({
       table: 'inquiries',
       submit: 'إرسال الاستفسار',
@@ -529,6 +653,8 @@ pages['contact.html'] = layout({
         `<div class="field"><label for="f_service">القسم <span class="req" aria-hidden="true">*</span></label><select id="f_service" name="service" required>
       <option value="استفسار عام">استفسار عام</option>
       ${SV.map((s) => `<option value="${esc(s.title)}">${esc(s.title)}</option>`).join('')}
+      <option value="اقتراحات العملاء">اقتراح لتطوير خدماتنا</option>
+      <option value="ملاحظة أو شكوى">ملاحظة أو شكوى</option>
     </select></div>`,
         field('full_name', 'الاسم', { req: 1, max: 120, ac: 'name' }),
         field('phone', 'رقم التواصل', { type: 'tel', req: 1, max: 30, ac: 'tel' }),
@@ -555,7 +681,7 @@ pages['admin/index.html'] = layout({
   desc: 'لوحة إدارة مكتب أونلاين تك.',
   noindex: true,
   minimal: true,
-  scripts: ['/assets/js/admin.js'],
+  scripts: ['/assets/js/admin-cms.js', '/assets/js/admin.js'],
   body: `<div class="admin-wrap">
   <section id="login" class="panel login-card" hidden>
     <h1 class="sr">تسجيل الدخول</h1>
@@ -595,7 +721,8 @@ const cfg = {
   FACEBOOK: S.facebook,
   PHONES: S.phones.map((p) => p.display),
   ADDRESS: S.address,
-  SERVICES: SV.map((s) => ({ n: s.n, slug: s.slug, title: s.title, emoji: s.emoji }))
+  SERVICES: SV.map((s) => ({ n: s.n, slug: s.slug, title: s.title, emoji: s.emoji })),
+  CATEGORIES: Object.assign(Object.fromEntries(SV.map((s) => [s.slug, s.title])), { office: 'المكتب وفريق العمل' })
 };
 fs.writeFileSync(path.join(dist, 'assets/js/config.js'), `window.OT=${JSON.stringify(cfg)};\n`);
 fs.writeFileSync(path.join(dist, 'robots.txt'), `User-agent: *\nDisallow: /admin/\n\nSitemap: ${S.siteUrl}/sitemap.xml\n`);
@@ -607,7 +734,7 @@ fs.writeFileSync(path.join(dist, 'sitemap.xml'),
 
 // Strict CSP is applied to the admin area only: PageSpeed Insights injects its own inline style/script into public pages and logs CSP violations that cost 8 Best-Practices points.
 // Netlify reads _headers from the published folder, so security headers also apply to drag-and-drop deploys.
-const csp = `default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
+const csp = `default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: ${S.supabase.url}; connect-src 'self' ${S.supabase.url}; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
 fs.writeFileSync(path.join(dist, '_headers'), `/*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY

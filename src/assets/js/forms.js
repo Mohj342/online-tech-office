@@ -63,17 +63,27 @@
       var row = {};
       fd.forEach(function (v, k) {
         if (k === 'website') return;
+        if (k === 'consent') { row.consent = true; return; }
         v = String(v).trim();
         if (v !== '') row[k] = v;
       });
+      if (row.ref) row.ref = row.ref.toUpperCase().replace(/\s+/g, '').replace(/^OT-?/, 'OT-');
+      var plain = form.hasAttribute('data-plain');
 
       btn.disabled = true;
       btn.textContent = 'جارٍ الإرسال…';
       try {
-        var ref = await OTAPI.insertRequest(table, row);
-        markSent(table);
-        form.reset();
-        OTReceipt(box, ref, 'تم استلام طلبك بنجاح. سيتواصل معك فريق المكتب قريبًا.');
+        if (plain) {
+          await OTAPI.insert(table, row);
+          markSent(table);
+          form.reset();
+          showMsg(box, 'ok', form.getAttribute('data-ok') || 'تم الإرسال بنجاح. شكرًا لك.');
+        } else {
+          var ref = await OTAPI.insertRequest(table, row);
+          markSent(table);
+          form.reset();
+          OTReceipt(box, ref, form.getAttribute('data-ok') || 'تم استلام طلبك بنجاح. سيتواصل معك فريق المكتب قريبًا.');
+        }
         box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } catch (err) {
         showMsg(box, 'err', 'تعذّر إرسال الطلب الآن. أعد المحاولة بعد قليل، أو', true);
