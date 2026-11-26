@@ -365,14 +365,14 @@ pages['about.html'] = layout({
   title: 'من نحن',
   desc: `${S.fullName} في ذمار: رسالتنا ورؤيتنا وقيمنا وكلمة الإدارة ومجالات الشراكة. ${S.tagline}.`,
   body: `${pageHero({ title: 'من نحن', lead: ABOUT.lead, crumbs: [] })}
-<section class="section"><div class="container layout2">
-  <div class="panel prose">
-    <figure class="frame about-frame">${aiImg('office-service', { sizes: '(max-width: 900px) 100vw, 60vw' })}</figure>
+<section class="section"><div class="container about-intro">
+  <div class="prose">
     <h2>نبذة عنا</h2>
     ${ABOUT.intro.map((p) => `<p>${esc(p)}</p>`).join('')}
     <p class="tagline-quote">${esc(S.tagline)}.</p>
+    <div class="btn-row"><a class="btn btn-primary" href="/services.html">تعرّف على خدماتنا</a><a class="btn btn-ghost" href="#contact">تواصل معنا ↓</a></div>
   </div>
-  ${contactSide()}
+  <figure class="frame about-frame">${aiImg('office-service', { sizes: '(max-width: 900px) 100vw, 48vw' })}</figure>
 </div></section>
 
 <section class="section alt"><div class="container">
@@ -414,7 +414,14 @@ pages['about.html'] = layout({
   <p class="sub">${esc(ABOUT.partners.lead)}</p>
   <div class="partners-grid feed-gap" data-feed="partners" data-limit="40"></div>
   <ul class="fields">${listItems(ABOUT.partners.fields)}</ul>
-  <div class="after btn-row"><strong class="closing">${esc(ABOUT.partners.closing)}</strong><a class="btn btn-primary" href="/contact.html">تواصل معنا للشراكة</a></div>
+  <div class="after btn-row"><strong class="closing">${esc(ABOUT.partners.closing)}</strong><a class="btn btn-primary" href="#contact">تواصل معنا للشراكة</a></div>
+</div></section>
+
+<section class="section about-cta" id="contact"><div class="container">
+  <h2>تواصل معنا</h2>
+  <p class="sub">عندك سؤال أو طلب أو فكرة شراكة؟ فريقنا جاهز يسمعك.</p>
+  ${contactSide().replace('<aside class="side">', '<div class="contact-row">').replace('</aside>', '</div>')}
+  <p class="after"><a class="btn btn-primary" href="/contact.html">أرسل رسالة من صفحة التواصل</a></p>
 </div></section>`
 });
 

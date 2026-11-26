@@ -573,3 +573,11 @@ a.partner:hover{border-color:var(--teal)}
 .foot-logo{display:block;height:46px;width:auto;margin-bottom:10px}
 .foot-bottom{align-items:center}
 @media (max-width:760px){.foot-bottom{flex-direction:column;justify-content:center;text-align:center;padding-bottom:88px}.foot-links{justify-content:center}}
+/* about page: intro text beside image; contact block at the end */
+.about-intro{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(20px,4vw,48px);align-items:center}
+.about-intro .about-frame{margin:0;aspect-ratio:4/3}
+.about-intro .btn-row{margin-top:18px}
+@media (max-width:860px){.about-intro{grid-template-columns:1fr}.about-intro .about-frame{order:-1;aspect-ratio:16/9}}
+.about-cta{scroll-margin-top:80px}
+.contact-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+@media (max-width:900px){.contact-row{grid-template-columns:1fr}}
