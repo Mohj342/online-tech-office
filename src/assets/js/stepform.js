@@ -1,7 +1,10 @@
-/* Multi-step job application: step navigation, file checks, uploads to private storage, then one row in job_seekers. */
+/* Multi-step forms (job application, employer request): step navigation, file checks,
+   uploads to private storage, then one row in the form's table. */
 (function () {
-  var form = document.getElementById('jobForm');
-  if (!form) return;
+  Array.prototype.forEach.call(document.querySelectorAll('form[data-stepform]'), init);
+
+  function init(form) {
+  var TABLE = form.getAttribute('data-stepform');
   var C = window.OT || {};
   var MAX = (parseInt(form.getAttribute('data-max-mb'), 10) || 15) * 1024 * 1024;
   var MAX_EXTRA = 5;
@@ -107,7 +110,7 @@
   // Prefill the desired job when arriving from a vacancy card: /register.html?job=...
   try {
     var job = new URLSearchParams(location.search).get('job');
-    if (job) form.elements.desired_job.value = job.slice(0, 150);
+    if (job && form.elements.desired_job) form.elements.desired_job.value = job.slice(0, 150);
   } catch (e) {}
 
   /* ---------- submit ---------- */
@@ -119,8 +122,8 @@
     var h = Array.prototype.map.call(b, function (x) { return (x + 256).toString(16).slice(1); }).join('');
     return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
   }
-  function lastSent() { try { return +localStorage.getItem('ot_last_job_seekers') || 0; } catch (e) { return 0; } }
-  function markSent() { try { localStorage.setItem('ot_last_job_seekers', String(Date.now())); } catch (e) {} }
+  function lastSent() { try { return +localStorage.getItem('ot_last_' + TABLE) || 0; } catch (e) { return 0; } }
+  function markSent() { try { localStorage.setItem('ot_last_' + TABLE, String(Date.now())); } catch (e) {} }
 
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -139,14 +142,25 @@
       if (c.hasAttribute('data-core')) { if (v) row[c.name] = v; return; }
       if (v) row.details.push({ k: c.name, l: c.getAttribute('data-l'), v: v });
     });
-    row.qualification = [get('highest'), get('specialization')].filter(Boolean).join(' – ').slice(0, 200);
-    var exp = [];
-    if (get('has_exp') === 'نعم') {
-      if (get('exp_years')) exp.push(get('exp_years') + ' سنوات خبرة');
-      if (get('prev_title')) exp.push(get('prev_title'));
-      if (get('prev_employer')) exp.push('لدى ' + get('prev_employer'));
-    } else if (get('has_exp')) exp.push('بدون خبرة سابقة');
-    if (exp.length) row.experience = exp.join(' – ').slice(0, 2000);
+    if (TABLE === 'job_seekers') {
+      row.qualification = [get('highest'), get('specialization')].filter(Boolean).join(' – ').slice(0, 200);
+      var exp = [];
+      if (get('has_exp') === 'نعم') {
+        if (get('exp_years')) exp.push(get('exp_years') + ' سنوات خبرة');
+        if (get('prev_title')) exp.push(get('prev_title'));
+        if (get('prev_employer')) exp.push('لدى ' + get('prev_employer'));
+      } else if (get('has_exp')) exp.push('بدون خبرة سابقة');
+      if (exp.length) row.experience = exp.join(' – ').slice(0, 2000);
+    } else if (TABLE === 'employer_requests') {
+      delete row.attachments;
+      row.positions = (get('job_title') + ' – العدد: ' + get('count')).slice(0, 1000);
+      var req = [];
+      if (get('qualification') && get('qualification') !== 'غير مشترط') req.push(get('qualification'));
+      if (get('specialization')) req.push('تخصص ' + get('specialization'));
+      if (get('exp_years')) req.push(get('exp_years'));
+      if (get('skills')) req.push(get('skills'));
+      if (req.length) row.requirements = req.join(' – ').slice(0, 2000);
+    }
 
     var uploads = [];
     Array.prototype.forEach.call(form.querySelectorAll('input[type="file"]'), function (input) {
@@ -168,12 +182,14 @@
           name: uploads[u].file.name.slice(0, 200), size: uploads[u].file.size });
       }
       sendBtn.textContent = 'جارٍ إرسال الطلب…';
-      await OTAPI.insert('job_seekers', row);
+      await OTAPI.insert(TABLE, row);
       markSent();
       form.reset();
       Array.prototype.forEach.call(form.querySelectorAll('.file-list'), function (l) { l.textContent = ''; });
       show(0);
-      msg('ok', 'تم استلام طلبك بنجاح. سنراجع بياناتك ونتواصل معك عند توفر فرصة مناسبة.');
+      msg('ok', TABLE === 'employer_requests'
+        ? 'تم استلام طلبكم بنجاح. سنراجع الطلب ونتواصل معكم لترشيح الكفاءات المناسبة.'
+        : 'تم استلام طلبك بنجاح. سنراجع بياناتك ونتواصل معك عند توفر فرصة مناسبة.');
       box.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (err) {
       var t = err && err.status === 413 ? 'أحد الملفات أكبر من المسموح. صغّر حجمه وأعد المحاولة، أو' : 'تعذّر إرسال الطلب الآن. أعد المحاولة بعد قليل، أو';
@@ -185,4 +201,5 @@
   });
 
   show(0);
+  }
 })();

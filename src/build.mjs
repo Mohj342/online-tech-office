@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { jobApplicationForm } from './jobform.mjs';
+import { jobApplicationForm, employerRequestForm } from './jobform.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -221,11 +221,13 @@ function serviceCards() {
 </a>`).join('\n')}</div>`;
 }
 
+// Yemeni mobiles start with 7 after the country code; landlines can't receive WhatsApp
+const isMobile = (p) => /^\+9677/.test(p.intl);
+
 const contactSide = () => `<aside class="side">
   <div class="panel">
     <h3>للتواصل المباشر</h3>
-    ${S.phones.map((p, i) => `<div class="kv"><span class="k">رقم التواصل ${ORD[i]}</span><span class="num">${tel(p)}</span></div>`).join('')}
-    <a class="btn btn-ghost btn-sm" href="https://wa.me/${S.whatsapp}" target="_blank" rel="noopener noreferrer">راسلنا عبر واتساب</a>
+    ${S.phones.map((p, i) => `<div class="kv"><span class="k">رقم التواصل ${ORD[i]}</span><span class="num">${tel(p)}</span>${isMobile(p) ? `<span class="btn-row mini"><a class="btn btn-ghost btn-sm" href="tel:${p.intl}" aria-label="اتصال على ${p.display}">اتصال</a><a class="btn btn-ghost btn-sm" href="https://wa.me/${p.intl.replace('+', '')}" target="_blank" rel="noopener noreferrer" aria-label="واتساب ${p.display}">واتساب</a></span>` : ''}</div>`).join('')}
   </div>
   <div class="panel">
     <h3>زيارة المكتب</h3>
@@ -378,7 +380,7 @@ pages['register.html'] = layout({
   file: 'register.html',
   title: 'استمارة طلب توظيف',
   desc: 'استمارة طلب توظيف في مكتب أونلاين تك: بياناتك ومؤهلاتك وخبراتك، مع إرفاق السيرة الذاتية والصور والشهادات.',
-  scripts: ['/assets/js/seeker.js'],
+  scripts: ['/assets/js/stepform.js'],
   body: `${pageHero({ title: 'استمارة طلب توظيف', lead: 'املأ بياناتك على مراحل، وأرفق سيرتك الذاتية وشهاداتك. نراجع الطلبات ونتواصل معك عند توفر فرصة مناسبة.', crumbs: [['التوظيف', '/services/employment.html']] })}
 <section class="section"><div class="container layout2">
   <div class="panel">
@@ -391,23 +393,12 @@ pages['register.html'] = layout({
 pages['employers.html'] = layout({
   file: 'employers.html',
   title: 'طلب موظفين',
-  desc: 'أرسل طلب موظفين لجهتك إلى مكتب أونلاين تك.',
-  body: `${pageHero({ title: 'طلب موظفين', lead: 'إذا كنت تبحث عن موظفين لجهتك، يرجى إرسال البيانات التالية.', crumbs: [['التوظيف', '/services/employment.html']] })}
+  desc: 'أرسل طلب موظفين لجهتك إلى مكتب أونلاين تك: الوظيفة المطلوبة والعدد والمؤهلات وظروف العمل، ونرشّح لك الكفاءات المناسبة.',
+  scripts: ['/assets/js/stepform.js'],
+  body: `${pageHero({ title: 'طلب موظفين', lead: 'أرسل تفاصيل الوظيفة التي تحتاجها جهتك على ثلاث خطوات، ونرشّح لك الكفاءات المناسبة من قاعدة الباحثين عن عمل لدينا.', crumbs: [['التوظيف', '/services/employment.html']] })}
 <section class="section"><div class="container layout2">
   <div class="panel">
-    <h2>بيانات الطلب</h2>
-    <p>سنراجع طلبك وننسّق معك بخصوص الكفاءات المتاحة.</p>
-    ${formBlock({
-      table: 'employer_requests',
-      submit: 'إرسال الطلب',
-      fields: [
-        field('org_name', 'اسم الجهة', { req: 1, max: 150, ac: 'organization' }),
-        field('positions', 'الوظائف المطلوبة وعدد كل وظيفة', { textarea: 1, req: 1, max: 1000, rows: 3 }),
-        field('requirements', 'المؤهلات والخبرات المطلوبة', { textarea: 1, max: 2000 }),
-        field('work_location', 'مكان العمل', { max: 150 }),
-        field('phone', 'رقم التواصل', { type: 'tel', req: 1, max: 30, ac: 'tel' })
-      ]
-    })}
+    ${employerRequestForm()}
   </div>
   ${contactSide()}
 </div></section>`

@@ -5,12 +5,19 @@
 
   var STATUS = { new: 'جديد', reviewed: 'تمت المراجعة', contacted: 'تم التواصل', archived: 'مؤرشف' };
   var SEEKER_STATUS = { new: 'جديد', reviewed: 'قيد المراجعة', contacted: 'تم التواصل', accepted: 'مقبول', rejected: 'مرفوض', archived: 'مؤرشف' };
+  var EMP_STATUS = { new: 'جديد', reviewed: 'قيد المراجعة', contacted: 'تم التواصل', processing: 'جارٍ الترشيح', done: 'مكتمل', archived: 'مؤرشف' };
   var BUCKET = 'seeker-files';
+  // Per-table follow-up fields shown in the details panel (admin-only columns)
+  var FOLLOW = {
+    job_seekers: [['interview_result', 'نتيجة المقابلة الشخصية', 'text', 500], ['admin_notes', 'ملاحظات مسؤول التوظيف', 'textarea', 4000]],
+    employer_requests: [['candidates', 'المرشحون لهذا الطلب', 'textarea', 2000], ['admin_notes', 'ملاحظات المكتب', 'textarea', 4000]]
+  };
+  var vacPrefill = null;
   var TABS = [
     { key: 'job_seekers', label: 'الباحثون عن عمل', status: true, statuses: SEEKER_STATUS, details: true, cols: [
       ['full_name', 'الاسم'], ['qualification', 'المؤهل والتخصص'], ['experience', 'الخبرات'],
       ['desired_job', 'الوظيفة المطلوبة'], ['residence', 'الإقامة'], ['phone', 'الهاتف']] },
-    { key: 'employer_requests', label: 'طلبات الموظفين', status: true, cols: [
+    { key: 'employer_requests', label: 'طلبات الموظفين', status: true, statuses: EMP_STATUS, details: true, cols: [
       ['org_name', 'الجهة'], ['positions', 'الوظائف المطلوبة'], ['requirements', 'المؤهلات'],
       ['work_location', 'مكان العمل'], ['phone', 'الهاتف']] },
     { key: 'inquiries', label: 'الاستفسارات', status: true, cols: [
@@ -68,7 +75,7 @@
   function exportCsv(t, rows) {
     var heads = ['created_at'].concat(t.cols.map(function (c) { return c[0]; }));
     heads.push(t.vacancies ? 'is_published' : 'status');
-    if (t.details) heads.push('details', 'attachments', 'interview_result', 'admin_notes');
+    if (t.details) heads = heads.concat(['details'], t.key === 'job_seekers' ? ['attachments'] : [], FOLLOW[t.key].map(function (x) { return x[0]; }));
     var lines = [heads.map(csvCell).join(',')];
     rows.forEach(function (r) {
       lines.push(heads.map(function (h) {
@@ -229,7 +236,7 @@
           detRow = el('tr', 'det-row');
           var td = el('td');
           td.colSpan = t.cols.length + 3;
-          td.appendChild(seekerDetails(r));
+          td.appendChild(detailsPanel(t, r));
           detRow.appendChild(td);
           tr.after(detRow);
           more.setAttribute('aria-expanded', 'true');
@@ -266,7 +273,7 @@
   }
 
   /* ---------- applicant details: answers, files (signed links), interview result, notes ---------- */
-  function seekerDetails(r) {
+  function detailsPanel(t, r) {
     var box = el('div', 'det');
 
     var d = r.details || [];
@@ -275,14 +282,43 @@
       var dl = el('dl');
       d.forEach(function (x) { dl.appendChild(el('dt', null, x.l)); dl.appendChild(el('dd', null, x.v)); });
       dl.appendChild(el('dt', null, 'الإقرار'));
-      dl.appendChild(el('dd', null, r.consent ? 'وافق المتقدم على صحة البيانات واستخدامها لأغراض التوظيف' : '—'));
+      dl.appendChild(el('dd', null, r.consent ? (t.key === 'employer_requests' ? 'أقرت الجهة بصحة البيانات ووافقت على التواصل والترشيح' : 'وافق المتقدم على صحة البيانات واستخدامها لأغراض التوظيف') : '—'));
       box.appendChild(h); box.appendChild(dl);
     } else {
       box.appendChild(el('p', 'vac-empty', 'هذا الطلب من النموذج القديم، ولا توجد بيانات إضافية.'));
     }
+    var det = {};
+    d.forEach(function (x) { det[x.k] = x.v; });
+
+    if (t.key === 'employer_requests') {
+      var pub = el('button', 'btn btn-ghost btn-sm', 'تحويل إلى وظيفة منشورة');
+      pub.type = 'button';
+      pub.addEventListener('click', function () {
+        var lines = [];
+        if (det.tasks) lines.push(det.tasks);
+        [['hours', 'ساعات العمل'], ['salary', 'الراتب'], ['benefits', 'المزايا'], ['count', 'العدد المطلوب'], ['deadline', 'آخر موعد للتقديم']].forEach(function (k) {
+          if (det[k[0]]) lines.push(k[1] + ': ' + det[k[0]]);
+        });
+        vacPrefill = {
+          title: det.job_title || r.positions || '',
+          company: r.org_name || '',
+          location: r.work_location || '',
+          job_type: det.work_type || '',
+          description: lines.join('\n'),
+          requirements: r.requirements || ''
+        };
+        var vt = TABS.filter(function (x) { return x.vacancies; })[0];
+        tab = vt; renderTabs(); loadTab();
+      });
+      var pubWrap = el('div', 'btn-row');
+      pubWrap.appendChild(pub);
+      if (det.publish_ok && det.publish_ok.indexOf('لا') === 0) pubWrap.appendChild(el('span', 'hint', 'تنبيه: الجهة فضّلت عدم نشر الإعلان.'));
+      box.appendChild(pubWrap);
+    }
 
     var files = r.attachments || [];
     var fw = el('div');
+    if (t.key === 'job_seekers') {
     fw.appendChild(el('h4', null, 'المرفقات (' + files.length + ')'));
     if (!files.length) fw.appendChild(el('p', 'vac-empty', 'لم يرفق المتقدم ملفات.'));
     var fl = el('div', 'files');
@@ -302,24 +338,28 @@
     });
     fw.appendChild(fl);
     box.appendChild(fw);
+    }
 
     var f = el('form', 'form');
     f.appendChild(el('h4', null, 'متابعة الطلب'));
-    var l1 = el('label', null, 'نتيجة المقابلة الشخصية');
-    var i1 = el('input'); i1.type = 'text'; i1.maxLength = 500; i1.value = r.interview_result || '';
-    var l2 = el('label', null, 'ملاحظات مسؤول التوظيف');
-    var i2 = el('textarea'); i2.maxLength = 4000; i2.value = r.admin_notes || '';
     var uid = 'd' + r.id.slice(0, 8);
-    i1.id = uid + 'i'; l1.htmlFor = i1.id; i2.id = uid + 'n'; l2.htmlFor = i2.id;
-    [l1, i1, l2, i2].forEach(function (x) { f.appendChild(x); });
+    var inputs = FOLLOW[t.key].map(function (x) {
+      var l = el('label', null, x[1]);
+      var c = x[2] === 'textarea' ? el('textarea') : el('input');
+      if (x[2] !== 'textarea') c.type = 'text';
+      c.maxLength = x[3]; c.value = r[x[0]] || ''; c.id = uid + x[0]; l.htmlFor = c.id;
+      f.appendChild(l); f.appendChild(c);
+      return [x[0], c];
+    });
     var sv = el('button', 'btn btn-primary btn-sm', 'حفظ المتابعة');
     sv.type = 'submit';
     f.appendChild(sv);
     f.addEventListener('submit', async function (e) {
       e.preventDefault();
       sv.disabled = true;
-      var body = { interview_result: i1.value.trim() || null, admin_notes: i2.value.trim() || null };
-      try { await OTAPI.patch('job_seekers', r.id, body, await token()); r.interview_result = body.interview_result; r.admin_notes = body.admin_notes; note('تم حفظ المتابعة.', 'ok'); }
+      var body = {};
+      inputs.forEach(function (p) { body[p[0]] = p[1].value.trim() || null; });
+      try { await OTAPI.patch(t.key, r.id, body, await token()); Object.assign(r, body); note('تم حفظ المتابعة.', 'ok'); }
       catch (err) { note('تعذّر حفظ المتابعة.', 'err'); }
       finally { sv.disabled = false; }
     });
@@ -352,6 +392,13 @@
       grid.appendChild(wrap);
     });
     f.appendChild(grid);
+    if (vacPrefill) {
+      var pf = vacPrefill; vacPrefill = null;
+      defs.forEach(function (d) { if (pf[d[0]]) f.elements[d[0]].value = String(pf[d[0]]).slice(0, d[4]); });
+      f.classList.add('prefilled');
+      setTimeout(function () { f.scrollIntoView({ behavior: 'smooth', block: 'start' }); f.elements.title.focus({ preventScroll: true }); }, 50);
+      note('عبّأنا نموذج الوظيفة من طلب الجهة. راجع البيانات ثم احفظ. (أرقام تواصل الجهة لا تُنشر).', 'ok');
+    }
 
     var chk = el('label', 'check');
     var cb = el('input'); cb.type = 'checkbox'; cb.name = 'is_published'; cb.id = 'v_pub';

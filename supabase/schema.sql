@@ -170,3 +170,22 @@ create policy seeker_files_admin_read on storage.objects
 create policy seeker_files_admin_delete on storage.objects
   for delete to authenticated
   using (bucket_id = 'seeker-files' and exists (select 1 from public.admin_users a where a.user_id = (select auth.uid())));
+
+-- ===== Migration "employer_requests_full_form" (2026-11-26) =====
+-- Full employer request (details[]), consent, admin-only candidates/notes, wider status set.
+alter table public.employer_requests
+  add column details jsonb not null default '[]'::jsonb,
+  add column consent boolean not null default false,
+  add column candidates text,
+  add column admin_notes text;
+alter table public.employer_requests
+  add constraint employer_requests_details_check check (jsonb_typeof(details) = 'array' and pg_column_size(details) <= 30000),
+  add constraint employer_requests_candidates_check check (char_length(candidates) <= 2000),
+  add constraint employer_requests_notes_check check (char_length(admin_notes) <= 4000);
+alter table public.employer_requests drop constraint employer_requests_status_check;
+alter table public.employer_requests add constraint employer_requests_status_check
+  check (status in ('new','reviewed','contacted','processing','done','archived'));
+drop policy employers_insert on public.employer_requests;
+create policy employers_insert on public.employer_requests
+  for insert to anon, authenticated
+  with check (status = 'new' and candidates is null and admin_notes is null);
