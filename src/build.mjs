@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { jobApplicationForm, employerRequestForm } from './jobform.mjs';
+import { ABOUT, SERVICE_DETAILS, FAQ, PRIVACY, TERMS } from './content.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -72,7 +73,7 @@ const NAV = [
   ['تواصل معنا', '/contact.html']
 ];
 
-function layout({ file, title, desc, body, scripts = [], noindex = false, chat = true, minimal = false }) {
+function layout({ file, title, desc, body, scripts = [], noindex = false, chat = true, minimal = false, extraLd = null }) {
   const fullTitle = file === 'index.html' ? `${S.fullName} | ${S.altName} – ذمار، اليمن` : `${title} | ${S.name}`;
   const url = '/' + file;
   const canon = S.siteUrl + (file === 'index.html' ? '/' : url);
@@ -97,7 +98,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
     '@type': 'BreadcrumbList',
     itemListElement: items.map(([n, u], i) => ({ '@type': 'ListItem', position: i + 1, name: n, item: S.siteUrl + u }))
   });
-  let ld2 = '';
+  let ld2 = extraLd ? ldTag(extraLd) : '';
   if (!noindex && file !== 'index.html') {
     const trail = [['الرئيسية', '/']];
     if (file.startsWith('services/')) trail.push(['خدماتنا', '/services.html']);
@@ -137,7 +138,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
       <li><a href="/employers.html">طلب موظفين</a></li>
     </ul></div>
   </div>
-  <div class="container foot-bottom">© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</div>
+  <div class="container foot-bottom"><span>© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</span><nav class="foot-links" aria-label="روابط السياسات"><a href="/faq.html">الأسئلة الشائعة</a><a href="/privacy.html">سياسة الخصوصية</a><a href="/terms.html">شروط الاستخدام</a></nav></div>
 </footer>`;
   const scriptTags = ['/assets/js/theme.js', '/assets/js/config.js', '/assets/js/api.js']
     .concat(minimal ? [] : ['/assets/js/nav.js'])
@@ -302,20 +303,56 @@ pages['index.html'] = layout({
 </div></section>`
 });
 
+const listItems = (arr) => arr.map((t) => `<li>${esc(t)}</li>`).join('');
+const docSections = (secs) => secs.map(([h, ps]) => `<h2>${esc(h)}</h2><ul class="list">${listItems(ps)}</ul>`).join('\n');
+
 pages['about.html'] = layout({
   file: 'about.html',
   title: 'من نحن',
-  desc: `${S.fullName}. ${S.tagline}.`,
-  body: `${pageHero({ title: 'من نحن', lead: S.tagline + '.', crumbs: [] })}
+  desc: `${S.fullName} في ذمار: رسالتنا ورؤيتنا وقيمنا وكلمة الإدارة ومجالات الشراكة. ${S.tagline}.`,
+  body: `${pageHero({ title: 'من نحن', lead: ABOUT.lead, crumbs: [] })}
 <section class="section"><div class="container layout2">
   <div class="panel prose">
-    <h2>${esc(S.fullName)}</h2>
-    <p>يضم المكتب سبعة أقسام تجمع التوظيف والخدمات الطلابية والدعاية والإعلان والتصميم والتسويق الإلكتروني وتعهد الحفلات والمناسبات والسفريات والسياحة والخدمات العقارية.</p>
-    <p>رسالتنا ${esc(S.tagline)}: نستقبل طلبك، ونراجعه، ونتواصل معك لنتفق على التفاصيل.</p>
-    <h3>أقسام المكتب</h3>
-    <ul class="list">${SV.map((s) => `<li><a href="${svcUrl(s)}">${esc(s.title)}</a></li>`).join('')}</ul>
+    <h2>نبذة عنا</h2>
+    ${ABOUT.intro.map((p) => `<p>${esc(p)}</p>`).join('')}
+    <p class="tagline-quote">${esc(S.tagline)}.</p>
   </div>
   ${contactSide()}
+</div></section>
+
+<section class="section alt"><div class="container">
+  <div class="mvp">
+    <article class="mvp-card"><h2>رسالتنا</h2><p>${esc(ABOUT.mission)}</p></article>
+    <article class="mvp-card"><h2>رؤيتنا</h2><p>${esc(ABOUT.vision)}</p></article>
+    <article class="mvp-card"><h2>غايتنا</h2><p>${esc(ABOUT.purpose)}</p></article>
+  </div>
+</div></section>
+
+<section class="section"><div class="container">
+  <h2>قيمنا</h2>
+  <p class="sub">المبادئ التي تحكم كل تعامل معنا.</p>
+  <ul class="values">${ABOUT.values.map(([h, p]) => `<li><h3>${esc(h)}</h3><p>${esc(p)}</p></li>`).join('')}</ul>
+</div></section>
+
+<section class="section alt"><div class="container split">
+  <div class="box"><h2>أهدافنا</h2><ul class="check-list">${listItems(ABOUT.goals)}</ul></div>
+  <div class="box"><h2>سياستنا في العمل</h2><dl class="policy">${ABOUT.policy.map(([h, p]) => `<dt>${esc(h)}</dt><dd>${esc(p)}</dd>`).join('')}</dl></div>
+</div></section>
+
+<section class="section" id="management"><div class="container">
+  <article class="word">
+    <h2>${esc(ABOUT.word.title)}</h2>
+    <p class="basmala">${esc(ABOUT.word.opening)}</p>
+    ${ABOUT.word.paras.map((p) => `<p>${esc(p)}</p>`).join('')}
+    <p class="sign">${esc(ABOUT.word.sign)}<br><span>${esc(S.tagline)}.</span></p>
+  </article>
+</div></section>
+
+<section class="section alt" id="partners"><div class="container">
+  <h2>شركاء النجاح والتطوير</h2>
+  <p class="sub">${esc(ABOUT.partners.lead)}</p>
+  <ul class="fields">${listItems(ABOUT.partners.fields)}</ul>
+  <div class="after btn-row"><strong class="closing">${esc(ABOUT.partners.closing)}</strong><a class="btn btn-primary" href="/contact.html">تواصل معنا للشراكة</a></div>
 </div></section>`
 });
 
@@ -336,8 +373,12 @@ pages['services/employment.html'] = layout({
 <section class="section"><div class="container">
   <div class="split">
     <div class="box"><h2>أبحث عن وظيفة</h2><p>املأ استمارة طلب التوظيف بياناتك ومؤهلاتك وخبراتك، وأرفق سيرتك الذاتية وشهاداتك. سنراجع طلبك عند توفر فرص وظيفية مناسبة.</p><a class="btn btn-primary" href="/register.html">التسجيل كباحث عن عمل</a></div>
-    <div class="box"><h2>طلب موظفين</h2><p>أرسل اسم الجهة والوظائف المطلوبة وعدد كل وظيفة والمؤهلات ومكان العمل ورقم التواصل.</p><a class="btn btn-primary" href="/employers.html">أرسل طلب موظفين</a></div>
+    <div class="box"><h2>طلب موظفين</h2><p>أرسل تفاصيل الوظيفة التي تحتاجها جهتك والعدد والمؤهلات وظروف العمل، ونرشّح لك الكفاءات المناسبة.</p><a class="btn btn-primary" href="/employers.html">أرسل طلب موظفين</a></div>
   </div>
+</div></section>
+<section class="section"><div class="container">
+  <h2>ماذا نقدم في قسم التوظيف</h2>
+  <ul class="svc-items">${listItems(SERVICE_DETAILS.employment.items)}</ul>
 </div></section>
 <section class="section alt"><div class="container">
   <h2>الوظائف المنشورة</h2>
@@ -348,28 +389,33 @@ pages['services/employment.html'] = layout({
 });
 
 for (const s of SV.slice(1)) {
-  const intro = `قسم ${s.title} في ${S.fullName}. اكتب لنا طلبك أو استفسارك وسنتواصل معك لتوضيح الخدمات المتاحة والتفاصيل.`;
+  const D = SERVICE_DETAILS[s.slug];
+  const intro = D.intro;
+  const opts = D.items.map((it) => `<option value="${esc(s.title + ' – ' + it)}">${esc(it)}</option>`).join('');
   pages[`services/${s.slug}.html`] = layout({
     file: `services/${s.slug}.html`,
     title: s.title,
     desc: intro,
-    body: `${pageHero({ title: s.title, lead: s.short, crumbs: [['خدماتنا', '/services.html']] })}
-<section class="section"><div class="container layout2">
-  <div class="grid-stack">
-    <div class="panel">
-      <h2>أرسل طلبك أو استفسارك</h2>
-      <p>${esc(intro)}</p>
-      ${formBlock({
-        table: 'inquiries',
-        submit: 'إرسال الطلب',
-        hidden: `<input type="hidden" name="service" value="${esc(s.title)}">`,
-        fields: [
-          field('full_name', 'الاسم', { req: 1, max: 120, ac: 'name' }),
-          field('phone', 'رقم التواصل', { type: 'tel', req: 1, max: 30, ac: 'tel' }),
-          field('message', 'طلبك أو استفسارك', { textarea: 1, req: 1, max: 3000, rows: 5 })
-        ]
-      })}
-    </div>
+    body: `${pageHero({ title: s.title, lead: intro, crumbs: [['خدماتنا', '/services.html']] })}
+<section class="section"><div class="container">
+  <h2>خدماتنا في هذا القسم</h2>
+  <p class="sub">اختر الخدمة التي تحتاجها وأرسل طلبك، أو تواصل معنا مباشرة لنتفق على التفاصيل.</p>
+  <ul class="svc-items">${listItems(D.items)}</ul>
+</div></section>
+<section class="section alt"><div class="container layout2">
+  <div class="panel" id="request">
+    <h2>اطلب الخدمة</h2>
+    <p>اكتب تفاصيل طلبك، وسيتواصل معك فريق القسم لتوضيح التكلفة والمدة والتفاصيل.</p>
+    ${formBlock({
+      table: 'inquiries',
+      submit: 'إرسال الطلب',
+      fields: [
+        `<div class="field"><label for="f_service_${s.slug}">الخدمة المطلوبة <span class="req" aria-hidden="true">*</span></label><select id="f_service_${s.slug}" name="service" required><option value="${esc(s.title)}">استفسار عام عن ${esc(s.title)}</option>${opts}</select></div>`,
+        field('full_name', 'الاسم', { req: 1, max: 120, ac: 'name' }),
+        field('phone', 'رقم التواصل', { type: 'tel', req: 1, max: 30, ac: 'tel' }),
+        field('message', 'تفاصيل طلبك', { textarea: 1, req: 1, max: 3000, rows: 5 })
+      ]
+    })}
   </div>
   ${contactSide()}
 </div></section>`
@@ -400,6 +446,40 @@ pages['employers.html'] = layout({
   <div class="panel">
     ${employerRequestForm()}
   </div>
+  ${contactSide()}
+</div></section>`
+});
+
+pages['faq.html'] = layout({
+  file: 'faq.html',
+  title: 'الأسئلة الشائعة',
+  desc: `إجابات عن أكثر الأسئلة شيوعًا حول خدمات ${S.fullName}: التوظيف وطلب الموظفين والخدمات والخصوصية والتواصل.`,
+  extraLd: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: FAQ.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
+  body: `${pageHero({ title: 'الأسئلة الشائعة', lead: 'إجابات سريعة عن أكثر ما يسألنا عنه عملاؤنا.' })}
+<section class="section"><div class="container layout2">
+  <div class="faq">${FAQ.map(([q, a], i) => `<details${i ? '' : ' open'}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div>
+  ${contactSide()}
+</div></section>`
+});
+
+pages['privacy.html'] = layout({
+  file: 'privacy.html',
+  title: 'سياسة الخصوصية',
+  desc: `كيف يجمع ${S.fullName} بياناتك ويستخدمها ويحميها، وما حقوقك عليها.`,
+  body: `${pageHero({ title: 'سياسة الخصوصية', lead: 'نحترم خصوصيتك، ونتعامل مع بياناتك وملفاتك كأمانة.' })}
+<section class="section"><div class="container layout2">
+  <div class="panel prose doc">${docSections(PRIVACY)}</div>
+  ${contactSide()}
+</div></section>`
+});
+
+pages['terms.html'] = layout({
+  file: 'terms.html',
+  title: 'شروط الاستخدام',
+  desc: `شروط استخدام موقع ${S.fullName} وخدماته.`,
+  body: `${pageHero({ title: 'شروط الاستخدام', lead: 'يرجى قراءة هذه الشروط قبل استخدام الموقع أو إرسال أي طلب.' })}
+<section class="section"><div class="container layout2">
+  <div class="panel prose doc">${docSections(TERMS)}</div>
   ${contactSide()}
 </div></section>`
 });

@@ -189,3 +189,8 @@ drop policy employers_insert on public.employer_requests;
 create policy employers_insert on public.employer_requests
   for insert to anon, authenticated
   with check (status = 'new' and candidates is null and admin_notes is null);
+
+-- ===== Migration "inquiries_service_length" (2026-11-26) =====
+-- Service field now carries "القسم – الخدمة الفرعية".
+alter table public.inquiries drop constraint inquiries_service_check;
+alter table public.inquiries add constraint inquiries_service_check check (char_length(service) between 2 and 200);
