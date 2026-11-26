@@ -10,6 +10,7 @@
   --amber:#FF8F1F; --paper:#FAF7F2; --white:#FFFFFF; --line:#E6DDD0; --muted:#5A5148;
   --surface:#FFFFFF; --surface-2:#F3EEE7; --bubble:#FFDDB8; --dark:#0B0B0B; --dark-2:#262626;
   --ok:#0F6B38; --ok-bg:#E2F4E9; --err:#A3231B; --err-bg:#FBE9E7; --r:14px; color-scheme:light;
+  --field-bg:#FFFFFF; --field-line:#CFC3B3;
   --font-d:'Reem Kufi','IBM Plex Sans Arabic',Tahoma,sans-serif;
   --font-b:'IBM Plex Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;
 }
@@ -19,6 +20,7 @@
   --ink:#F3EEE7; --ink-2:#D9D2C7; --teal-d:#FFA84D; --teal-l:#2E2113; --paper:#121110; --line:#34302B; --muted:#B5ADA2;
   --surface:#1C1A18; --surface-2:#161412; --bubble:#4A3315; --dark:#070706; --dark-2:#2A2724;
   --ok:#7BDCA0; --ok-bg:#12301F; --err:#FF9A93; --err-bg:#3A1714; color-scheme:dark;
+  --field-bg:#0E0D0C; --field-line:#7A7064;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
@@ -557,3 +559,12 @@ a.partner:hover{border-color:var(--teal)}
 .lightbox img{display:block;max-width:100%;max-height:86vh;width:auto;height:auto;border-radius:12px;margin-inline:auto}
 .lightbox p{color:#fff;text-align:center;margin:10px 0 0;font-weight:600}
 .lightbox .lb-x{position:absolute;top:8px;inset-inline-start:8px;width:40px;height:40px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:22px;cursor:pointer}
+
+/* form fields: their own background + a clearly visible border in both themes (dark mode panels and fields used to blend) */
+.form input[type=text],.form input[type=tel],.form input[type=email],.form input[type=password],.form input[type=number],.form input[type=url],.form input[type=search],.form input[type=date],.form input[type=file],.form textarea,.form select,
+.det textarea,.det input[type=text],.bar2 .search,.track-form input{background:var(--field-bg);border:1.5px solid var(--field-line)}
+.form input::placeholder,.form textarea::placeholder{color:var(--muted);opacity:.8}
+.form input:hover,.form textarea:hover,.form select:hover{border-color:var(--teal-d)}
+.form input:focus,.form textarea:focus,.form select:focus,.det textarea:focus,.det input:focus,.bar2 .search:focus{border-color:var(--teal);outline:none;box-shadow:0 0 0 3px var(--teal-l)}
+.check input{accent-color:var(--teal)}
+.rating label{color:var(--field-line)}
