@@ -302,3 +302,65 @@ begin
 end $$;
 revoke execute on function public.track_request(text, text) from public;
 grant execute on function public.track_request(text, text) to anon, authenticated;
+
+-- ===== Migration "track_rate_limit_per_ip" (2026-11-26) =====
+-- Rate-limit tracking lookups per caller IP (not per request number), so a guesser can never lock out the real customer.
+alter table public.track_attempts add column ip text not null default 'unknown';
+drop index if exists public.track_attempts_ref_idx;
+create index track_attempts_ip_idx on public.track_attempts (ip, at desc);
+
+create or replace function public.client_ip() returns text
+language plpgsql stable set search_path = '' as $$
+declare h json;
+begin
+  begin h := nullif(current_setting('request.headers', true), '')::json; exception when others then h := null; end;
+  if h is null then return 'unknown'; end if;
+  return coalesce(nullif(h->>'cf-connecting-ip', ''), nullif(h->>'x-real-ip', ''),
+                  nullif(trim(split_part(h->>'x-forwarded-for', ',', 1)), ''), 'unknown');
+end $$;
+revoke execute on function public.client_ip() from public, anon, authenticated;
+
+create or replace function public.track_request(p_ref text, p_phone text)
+returns table (kind text, title text, stage text, delivery boolean, note text, created_at timestamptz, updated_at timestamptz)
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_ref text := upper(trim(coalesce(p_ref, '')));
+  v_ph  text := right(regexp_replace(translate(coalesce(p_phone, ''), '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9);
+  v_ip  text := public.client_ip();
+  v_n   integer := 0;
+begin
+  if v_ref !~ '^OT-[0-9]{6}$' or char_length(v_ph) < 6 then return; end if;
+  -- this device: max 8 wrong tries per request number, and 30 wrong tries overall, per hour
+  if (select count(*) from public.track_attempts a where a.ip = v_ip and a.ref = v_ref and a.at > now() - interval '1 hour') >= 8
+  or (select count(*) from public.track_attempts a where a.ip = v_ip and a.at > now() - interval '1 hour') >= 30 then
+    raise exception 'too many attempts' using errcode = 'P0001', hint = 'rate_limited';
+  end if;
+
+  return query
+    select 'job'::text, ('طلب توظيف – ' || s.desired_job)::text,
+      case s.status when 'new' then 'new' when 'accepted' then 'done' when 'rejected' then 'rejected' when 'archived' then 'closed' else 'processing' end,
+      false, s.public_note, s.created_at, s.updated_at
+    from public.job_seekers s
+    where s.ref = v_ref and right(regexp_replace(translate(s.phone, '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9) = v_ph
+    union all
+    select 'employer', ('طلب موظفين – ' || e.positions)::text,
+      case e.status when 'new' then 'new' when 'done' then 'done' when 'rejected' then 'rejected' when 'archived' then 'closed' else 'processing' end,
+      false, e.public_note, e.created_at, e.updated_at
+    from public.employer_requests e
+    where e.ref = v_ref and right(regexp_replace(translate(e.phone, '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9) = v_ph
+    union all
+    select 'service', i.service::text,
+      case i.status when 'new' then 'new' when 'shipping' then 'shipping' when 'done' then 'done' when 'rejected' then 'rejected' when 'archived' then 'closed' else 'processing' end,
+      (i.status = 'shipping' or i.service like 'الدعاية%' or i.service like 'الخدمات الطلابية%'),
+      i.public_note, i.created_at, i.updated_at
+    from public.inquiries i
+    where i.ref = v_ref and right(regexp_replace(translate(i.phone, '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9) = v_ph;
+
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    insert into public.track_attempts (ref, ip) values (v_ref, v_ip);
+    delete from public.track_attempts where at < now() - interval '1 day';
+  end if;
+end $$;
+revoke execute on function public.track_request(text, text) from public;
+grant execute on function public.track_request(text, text) to anon, authenticated;

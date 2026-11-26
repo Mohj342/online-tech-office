@@ -92,7 +92,7 @@
       if (rows && rows.length) render(rows[0], ref);
       else fail('لم نجد طلبًا بهذا الرقم ورقم الجوال. تأكد من الرقمين، واكتب رقم الجوال نفسه الذي أرسلت به الطلب.');
     } catch (err) {
-      if (err.body && /rate_limited|too many/.test(err.body)) fail('محاولات كثيرة على هذا الرقم. حاول مرة أخرى بعد ساعة، أو تواصل معنا مباشرة.');
+      if (err.body && /rate_limited|too many/.test(err.body)) fail('محاولات كثيرة من جهازك. حاول مرة أخرى بعد ساعة، أو تواصل معنا مباشرة.');
       else fail('تعذّر الاتصال الآن. حاول بعد قليل.');
     } finally {
       btn.disabled = false; btn.textContent = label;
