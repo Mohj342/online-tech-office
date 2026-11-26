@@ -182,12 +182,12 @@
           name: uploads[u].file.name.slice(0, 200), size: uploads[u].file.size });
       }
       sendBtn.textContent = 'جارٍ إرسال الطلب…';
-      await OTAPI.insert(TABLE, row);
+      var ref = await OTAPI.insertRequest(TABLE, row);
       markSent();
       form.reset();
       Array.prototype.forEach.call(form.querySelectorAll('.file-list'), function (l) { l.textContent = ''; });
       show(0);
-      msg('ok', TABLE === 'employer_requests'
+      OTReceipt(box, ref, TABLE === 'employer_requests'
         ? 'تم استلام طلبكم بنجاح. سنراجع الطلب ونتواصل معكم لترشيح الكفاءات المناسبة.'
         : 'تم استلام طلبك بنجاح. سنراجع بياناتك ونتواصل معك عند توفر فرصة مناسبة.');
       box.scrollIntoView({ behavior: 'smooth', block: 'center' });

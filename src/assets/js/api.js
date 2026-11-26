@@ -19,7 +19,31 @@
     throw err;
   }
 
+  function newRef() {
+    var n = new Uint32Array(1);
+    (window.crypto || window.msCrypto).getRandomValues(n);
+    return 'OT-' + String(100000 + (n[0] % 900000));
+  }
+
   window.OTAPI = {
+    newRef: newRef,
+    /* insert a request with a fresh request number; retries if the number is already taken */
+    insertRequest: async function (table, row) {
+      for (var i = 0; i < 4; i++) {
+        row.ref = newRef();
+        try { await window.OTAPI.insert(table, row); return row.ref; }
+        catch (e) { if (e.status !== 409 || i === 3) throw e; }
+      }
+    },
+    rpc: async function (fn, args, token) {
+      var res = await fetch(C.SUPABASE_URL + '/rest/v1/rpc/' + fn, {
+        method: 'POST',
+        headers: headers(token),
+        body: JSON.stringify(args || {})
+      });
+      await check(res);
+      return res.json();
+    },
     insert: async function (table, row) {
       var res = await fetch(C.SUPABASE_URL + '/rest/v1/' + table, {
         method: 'POST',
@@ -113,5 +137,38 @@
       await check(res);
       return res.json();
     }
+  };
+})();
+
+/* Success receipt shown after any request: big request number, copy, save to WhatsApp, track link. */
+(function () {
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  window.OTReceipt = function (box, ref, lead) {
+    box.hidden = false;
+    box.className = 'form-msg ok receipt';
+    box.textContent = '';
+    box.appendChild(el('p', 'receipt-lead', lead));
+    var row = el('p', 'receipt-ref');
+    row.appendChild(el('span', null, 'رقم طلبك: '));
+    var code = el('strong', null, ref);
+    code.dir = 'ltr';
+    row.appendChild(code);
+    box.appendChild(row);
+    box.appendChild(el('p', 'receipt-hint', 'احتفظ بهذا الرقم لمتابعة حالة طلبك.'));
+    var acts = el('div', 'btn-row');
+    var copy = el('button', 'btn btn-ghost btn-sm', 'نسخ الرقم');
+    copy.type = 'button';
+    copy.addEventListener('click', function () {
+      var done = function () { copy.textContent = 'تم النسخ ✓'; setTimeout(function () { copy.textContent = 'نسخ الرقم'; }, 2000); };
+      if (navigator.clipboard) navigator.clipboard.writeText(ref).then(done, function () {});
+    });
+    var url = location.origin + '/track.html?ref=' + encodeURIComponent(ref);
+    var wa = el('a', 'btn btn-ghost btn-sm', 'احفظه في واتساب');
+    wa.href = 'https://wa.me/?text=' + encodeURIComponent('رقم طلبي لدى مكتب أونلاين تك: ' + ref + '\nمتابعة الطلب: ' + url);
+    wa.target = '_blank'; wa.rel = 'noopener noreferrer';
+    var tr = el('a', 'btn btn-primary btn-sm', 'تابع طلبك');
+    tr.href = '/track.html?ref=' + encodeURIComponent(ref);
+    acts.appendChild(copy); acts.appendChild(wa); acts.appendChild(tr);
+    box.appendChild(acts);
   };
 })();

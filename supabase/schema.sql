@@ -194,3 +194,111 @@ create policy employers_insert on public.employer_requests
 -- Service field now carries "القسم – الخدمة الفرعية".
 alter table public.inquiries drop constraint inquiries_service_check;
 alter table public.inquiries add constraint inquiries_service_check check (char_length(service) between 2 and 200);
+
+-- ===== Migration "request_tracking" (2026-11-26) =====
+-- Request numbers (OT-######) on all request tables, client-facing note, last-update time,
+-- cross-table unique numbers, and a phone-verified public tracking lookup with simple rate limiting.
+create or replace function public.gen_ref() returns text
+language sql volatile set search_path = '' as $$
+  select 'OT-' || (100000 + floor(random() * 900000))::int::text;
+$$;
+
+alter table public.job_seekers       add column ref text, add column public_note text, add column updated_at timestamptz not null default now();
+alter table public.employer_requests add column ref text, add column public_note text, add column updated_at timestamptz not null default now();
+alter table public.inquiries         add column ref text, add column public_note text, add column admin_notes text, add column updated_at timestamptz not null default now();
+-- (existing rows were backfilled with unique numbers here)
+
+alter table public.job_seekers       alter column ref set default public.gen_ref(), alter column ref set not null,
+  add constraint job_seekers_ref_check check (ref ~ '^OT-[0-9]{6}$'), add constraint job_seekers_ref_key unique (ref),
+  add constraint job_seekers_public_note_check check (char_length(public_note) <= 500);
+alter table public.employer_requests alter column ref set default public.gen_ref(), alter column ref set not null,
+  add constraint employer_requests_ref_check check (ref ~ '^OT-[0-9]{6}$'), add constraint employer_requests_ref_key unique (ref),
+  add constraint employer_requests_public_note_check check (char_length(public_note) <= 500);
+alter table public.inquiries         alter column ref set default public.gen_ref(), alter column ref set not null,
+  add constraint inquiries_ref_check check (ref ~ '^OT-[0-9]{6}$'), add constraint inquiries_ref_key unique (ref),
+  add constraint inquiries_public_note_check check (char_length(public_note) <= 500),
+  add constraint inquiries_admin_notes_check check (char_length(admin_notes) <= 4000);
+
+alter table public.inquiries drop constraint inquiries_status_check;
+alter table public.inquiries add constraint inquiries_status_check
+  check (status in ('new','reviewed','contacted','processing','shipping','done','rejected','archived'));
+alter table public.employer_requests drop constraint employer_requests_status_check;
+alter table public.employer_requests add constraint employer_requests_status_check
+  check (status in ('new','reviewed','contacted','processing','done','rejected','archived'));
+
+create or replace function public.request_ref_guard() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'INSERT' or new.ref is distinct from old.ref then
+    if (tg_table_name <> 'job_seekers'       and exists (select 1 from public.job_seekers       where ref = new.ref))
+    or (tg_table_name <> 'employer_requests' and exists (select 1 from public.employer_requests where ref = new.ref))
+    or (tg_table_name <> 'inquiries'         and exists (select 1 from public.inquiries         where ref = new.ref)) then
+      raise exception 'duplicate request number' using errcode = '23505';
+    end if;
+  end if;
+  if tg_op = 'UPDATE' then new.updated_at := now(); end if;
+  return new;
+end $$;
+revoke execute on function public.request_ref_guard() from public, anon, authenticated;
+create trigger job_seekers_ref_guard       before insert or update on public.job_seekers       for each row execute function public.request_ref_guard();
+create trigger employer_requests_ref_guard before insert or update on public.employer_requests for each row execute function public.request_ref_guard();
+create trigger inquiries_ref_guard         before insert or update on public.inquiries         for each row execute function public.request_ref_guard();
+
+drop policy seekers_insert on public.job_seekers;
+create policy seekers_insert on public.job_seekers for insert to anon, authenticated
+  with check (status = 'new' and interview_result is null and admin_notes is null and public_note is null);
+drop policy employers_insert on public.employer_requests;
+create policy employers_insert on public.employer_requests for insert to anon, authenticated
+  with check (status = 'new' and candidates is null and admin_notes is null and public_note is null);
+drop policy inquiries_insert on public.inquiries;
+create policy inquiries_insert on public.inquiries for insert to anon, authenticated
+  with check (status = 'new' and admin_notes is null and public_note is null);
+
+-- failed-lookup log (no policies on purpose: only track_request writes it)
+create table public.track_attempts (ref text not null, at timestamptz not null default now());
+create index track_attempts_ref_idx on public.track_attempts (ref, at desc);
+alter table public.track_attempts enable row level security;
+revoke all on public.track_attempts from anon, authenticated;
+
+-- Public tracking (intentionally callable by anon): returns kind, title, stage and note only — never names or numbers.
+create or replace function public.track_request(p_ref text, p_phone text)
+returns table (kind text, title text, stage text, delivery boolean, note text, created_at timestamptz, updated_at timestamptz)
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_ref text := upper(trim(coalesce(p_ref, '')));
+  v_ph  text := right(regexp_replace(translate(coalesce(p_phone, ''), '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9);
+  v_n   integer := 0;
+begin
+  if v_ref !~ '^OT-[0-9]{6}$' or char_length(v_ph) < 6 then return; end if;
+  if (select count(*) from public.track_attempts a where a.ref = v_ref and a.at > now() - interval '1 hour') >= 8 then
+    raise exception 'too many attempts' using errcode = 'P0001', hint = 'rate_limited';
+  end if;
+
+  return query
+    select 'job'::text, ('طلب توظيف – ' || s.desired_job)::text,
+      case s.status when 'new' then 'new' when 'accepted' then 'done' when 'rejected' then 'rejected' when 'archived' then 'closed' else 'processing' end,
+      false, s.public_note, s.created_at, s.updated_at
+    from public.job_seekers s
+    where s.ref = v_ref and right(regexp_replace(translate(s.phone, '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9) = v_ph
+    union all
+    select 'employer', ('طلب موظفين – ' || e.positions)::text,
+      case e.status when 'new' then 'new' when 'done' then 'done' when 'rejected' then 'rejected' when 'archived' then 'closed' else 'processing' end,
+      false, e.public_note, e.created_at, e.updated_at
+    from public.employer_requests e
+    where e.ref = v_ref and right(regexp_replace(translate(e.phone, '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9) = v_ph
+    union all
+    select 'service', i.service::text,
+      case i.status when 'new' then 'new' when 'shipping' then 'shipping' when 'done' then 'done' when 'rejected' then 'rejected' when 'archived' then 'closed' else 'processing' end,
+      (i.status = 'shipping' or i.service like 'الدعاية%' or i.service like 'الخدمات الطلابية%'),
+      i.public_note, i.created_at, i.updated_at
+    from public.inquiries i
+    where i.ref = v_ref and right(regexp_replace(translate(i.phone, '٠١٢٣٤٥٦٧٨٩', '0123456789'), '\D', '', 'g'), 9) = v_ph;
+
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    insert into public.track_attempts (ref) values (v_ref);
+    delete from public.track_attempts where at < now() - interval '1 day';
+  end if;
+end $$;
+revoke execute on function public.track_request(text, text) from public;
+grant execute on function public.track_request(text, text) to anon, authenticated;

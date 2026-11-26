@@ -70,10 +70,10 @@
       btn.disabled = true;
       btn.textContent = 'جارٍ الإرسال…';
       try {
-        await OTAPI.insert(table, row);
+        var ref = await OTAPI.insertRequest(table, row);
         markSent(table);
         form.reset();
-        showMsg(box, 'ok', 'تم استلام بياناتك بنجاح. سنراجعها ونتواصل معك عند الحاجة.');
+        OTReceipt(box, ref, 'تم استلام طلبك بنجاح. سيتواصل معك فريق المكتب قريبًا.');
         box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } catch (err) {
         showMsg(box, 'err', 'تعذّر إرسال الطلب الآن. أعد المحاولة بعد قليل، أو', true);

@@ -70,6 +70,7 @@ const NAV = [
   ['من نحن', '/about.html'],
   ['خدماتنا', '/services.html'],
   ['التوظيف', '/services/employment.html'],
+  ['تابع طلبك', '/track.html'],
   ['تواصل معنا', '/contact.html']
 ];
 
@@ -138,7 +139,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
       <li><a href="/employers.html">طلب موظفين</a></li>
     </ul></div>
   </div>
-  <div class="container foot-bottom"><span>© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</span><nav class="foot-links" aria-label="روابط السياسات"><a href="/faq.html">الأسئلة الشائعة</a><a href="/privacy.html">سياسة الخصوصية</a><a href="/terms.html">شروط الاستخدام</a></nav></div>
+  <div class="container foot-bottom"><span>© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</span><nav class="foot-links" aria-label="روابط السياسات"><a href="/track.html">تابع طلبك</a><a href="/faq.html">الأسئلة الشائعة</a><a href="/privacy.html">سياسة الخصوصية</a><a href="/terms.html">شروط الاستخدام</a></nav></div>
 </footer>`;
   const scriptTags = ['/assets/js/theme.js', '/assets/js/config.js', '/assets/js/api.js']
     .concat(minimal ? [] : ['/assets/js/nav.js'])
@@ -445,6 +446,35 @@ pages['employers.html'] = layout({
 <section class="section"><div class="container layout2">
   <div class="panel">
     ${employerRequestForm()}
+  </div>
+  ${contactSide()}
+</div></section>`
+});
+
+pages['track.html'] = layout({
+  file: 'track.html',
+  title: 'تابع طلبك',
+  desc: `تابع حالة طلبك لدى ${S.fullName} برقم الطلب ورقم الجوال.`,
+  scripts: ['/assets/js/track.js'],
+  body: `${pageHero({ title: 'تابع طلبك', lead: 'اكتب رقم الطلب الذي ظهر لك بعد الإرسال، ورقم الجوال الذي أرسلت به الطلب.' })}
+<section class="section"><div class="container layout2">
+  <div class="grid-stack">
+    <div class="panel">
+      <form class="form track-form" id="trackForm" novalidate aria-label="متابعة الطلب">
+        <div class="grid2">
+          <div class="field"><label for="t_ref">رقم الطلب <span class="req" aria-hidden="true">*</span></label><input type="text" id="t_ref" name="ref" dir="ltr" required maxlength="12" placeholder="OT-000000" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+          <div class="field"><label for="t_phone">رقم الجوال <span class="req" aria-hidden="true">*</span></label><input type="tel" id="t_phone" name="phone" dir="ltr" inputmode="tel" required minlength="6" maxlength="30" pattern="[0-9+\\s\\-٠-٩]{6,30}" title="أرقام فقط" autocomplete="tel"></div>
+        </div>
+        <button class="btn btn-primary" type="submit">تابع الطلب</button>
+        <noscript><p class="form-msg err">تحتاج صفحة المتابعة إلى تفعيل JavaScript، أو تواصل معنا مباشرة.</p></noscript>
+      </form>
+    </div>
+    <div id="trackResult" tabindex="-1" aria-live="polite" hidden></div>
+    <div class="panel">
+      <h2>مراحل الطلب</h2>
+      <ul class="check-list"><li><strong>قيد الطلب:</strong> استلمنا طلبك وهو في انتظار المراجعة.</li><li><strong>تحت المعالجة:</strong> فريق المكتب يعمل على طلبك.</li><li><strong>في الطريق:</strong> للطلبات التي تُسلَّم، مثل المطبوعات واللوحات.</li><li><strong>تم بنجاح</strong> أو <strong>مرفوض:</strong> النتيجة النهائية لطلبك.</li></ul>
+      <p class="hint">نسيت رقم الطلب؟ تواصل معنا عبر واتساب واذكر اسمك ونوع طلبك.</p>
+    </div>
   </div>
   ${contactSide()}
 </div></section>`

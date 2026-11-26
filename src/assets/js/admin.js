@@ -5,23 +5,30 @@
 
   var STATUS = { new: 'جديد', reviewed: 'تمت المراجعة', contacted: 'تم التواصل', archived: 'مؤرشف' };
   var SEEKER_STATUS = { new: 'جديد', reviewed: 'قيد المراجعة', contacted: 'تم التواصل', accepted: 'مقبول', rejected: 'مرفوض', archived: 'مؤرشف' };
-  var EMP_STATUS = { new: 'جديد', reviewed: 'قيد المراجعة', contacted: 'تم التواصل', processing: 'جارٍ الترشيح', done: 'مكتمل', archived: 'مؤرشف' };
+  var EMP_STATUS = { new: 'جديد', reviewed: 'قيد المراجعة', contacted: 'تم التواصل', processing: 'جارٍ الترشيح', done: 'مكتمل', rejected: 'مرفوض', archived: 'مؤرشف' };
+  var INQ_STATUS = { new: 'جديد', reviewed: 'قيد المراجعة', contacted: 'تم التواصل', processing: 'تحت المعالجة', shipping: 'في الطريق', done: 'تم بنجاح', rejected: 'مرفوض', archived: 'مؤرشف' };
+  // What the client sees on the tracking page for each internal status (mirrors public.track_request)
+  function publicStage(status) {
+    return { new: 'قيد الطلب', shipping: 'في الطريق', accepted: 'تم بنجاح', done: 'تم بنجاح', rejected: 'مرفوض', archived: 'مغلق' }[status] || 'تحت المعالجة';
+  }
+  var PUBLIC_NOTE = ['public_note', 'ملاحظة للعميل (تظهر له في صفحة «تابع طلبك»)', 'textarea', 500];
   var BUCKET = 'seeker-files';
   // Per-table follow-up fields shown in the details panel (admin-only columns)
   var FOLLOW = {
-    job_seekers: [['interview_result', 'نتيجة المقابلة الشخصية', 'text', 500], ['admin_notes', 'ملاحظات مسؤول التوظيف', 'textarea', 4000]],
-    employer_requests: [['candidates', 'المرشحون لهذا الطلب', 'textarea', 2000], ['admin_notes', 'ملاحظات المكتب', 'textarea', 4000]]
+    inquiries: [PUBLIC_NOTE, ['admin_notes', 'ملاحظات داخلية (لا يراها العميل)', 'textarea', 4000]],
+    job_seekers: [PUBLIC_NOTE, ['interview_result', 'نتيجة المقابلة الشخصية', 'text', 500], ['admin_notes', 'ملاحظات مسؤول التوظيف', 'textarea', 4000]],
+    employer_requests: [PUBLIC_NOTE, ['candidates', 'المرشحون لهذا الطلب', 'textarea', 2000], ['admin_notes', 'ملاحظات المكتب', 'textarea', 4000]]
   };
   var vacPrefill = null;
   var TABS = [
     { key: 'job_seekers', label: 'الباحثون عن عمل', status: true, statuses: SEEKER_STATUS, details: true, cols: [
-      ['full_name', 'الاسم'], ['qualification', 'المؤهل والتخصص'], ['experience', 'الخبرات'],
+      ['ref', 'رقم الطلب'], ['full_name', 'الاسم'], ['qualification', 'المؤهل والتخصص'], ['experience', 'الخبرات'],
       ['desired_job', 'الوظيفة المطلوبة'], ['residence', 'الإقامة'], ['phone', 'الهاتف']] },
     { key: 'employer_requests', label: 'طلبات الموظفين', status: true, statuses: EMP_STATUS, details: true, cols: [
-      ['org_name', 'الجهة'], ['positions', 'الوظائف المطلوبة'], ['requirements', 'المؤهلات'],
+      ['ref', 'رقم الطلب'], ['org_name', 'الجهة'], ['positions', 'الوظائف المطلوبة'], ['requirements', 'المؤهلات'],
       ['work_location', 'مكان العمل'], ['phone', 'الهاتف']] },
-    { key: 'inquiries', label: 'الاستفسارات', status: true, cols: [
-      ['service', 'القسم'], ['full_name', 'الاسم'], ['phone', 'الهاتف'], ['message', 'الرسالة']] },
+    { key: 'inquiries', label: 'طلبات الخدمات', status: true, statuses: INQ_STATUS, details: true, cols: [
+      ['ref', 'رقم الطلب'], ['service', 'القسم والخدمة'], ['full_name', 'الاسم'], ['phone', 'الهاتف'], ['message', 'الرسالة']] },
     { key: 'vacancies', label: 'الوظائف المنشورة', vacancies: true, cols: [
       ['title', 'المسمى'], ['company', 'الجهة'], ['location', 'المكان'], ['job_type', 'النوع'],
       ['description', 'الوصف'], ['requirements', 'المتطلبات']] },
@@ -75,7 +82,7 @@
   function exportCsv(t, rows) {
     var heads = ['created_at'].concat(t.cols.map(function (c) { return c[0]; }));
     heads.push(t.vacancies ? 'is_published' : 'status');
-    if (t.details) heads = heads.concat(['details'], t.key === 'job_seekers' ? ['attachments'] : [], FOLLOW[t.key].map(function (x) { return x[0]; }));
+    if (t.details) heads = heads.concat(t.key === 'inquiries' ? [] : ['details'], t.key === 'job_seekers' ? ['attachments'] : [], FOLLOW[t.key].map(function (x) { return x[0]; }));
     var lines = [heads.map(csvCell).join(',')];
     rows.forEach(function (r) {
       lines.push(heads.map(function (h) {
@@ -163,6 +170,22 @@
     ex.type = 'button';
     ex.disabled = !rows.length;
     ex.addEventListener('click', function () { exportCsv(t, rows); });
+    if (t.details && rows.length) {
+      var q = el('input', 'search');
+      q.type = 'search';
+      q.placeholder = 'ابحث برقم الطلب أو الاسم أو الهاتف';
+      q.setAttribute('aria-label', 'بحث');
+      q.addEventListener('input', function () {
+        var v = q.value.trim().toLowerCase().replace(/^ot-?/, '');
+        Array.prototype.forEach.call(view.querySelectorAll('tbody > tr:not(.det-row)'), function (tr) {
+          var hit = !v || (tr.getAttribute('data-s') || '').indexOf(v) >= 0;
+          tr.hidden = !hit;
+          var nx = tr.nextElementSibling;
+          if (nx && nx.classList.contains('det-row')) nx.hidden = !hit;
+        });
+      });
+      bar.appendChild(q);
+    }
     bar.appendChild(ex);
     view.appendChild(bar);
 
@@ -182,10 +205,13 @@
     var tb = el('tbody');
     rows.forEach(function (r) {
       var tr = el('tr');
+      tr.setAttribute('data-s', [r.ref, r.full_name, r.org_name, r.phone].filter(Boolean).join(' ').toLowerCase().replace(/ot-/g, ''));
       tr.appendChild(el('td', 'nowrap', fmtDate(r.created_at)));
       t.cols.forEach(function (c) {
-        var td = el('td', c[0] === 'phone' ? 'nowrap' : null, r[c[0]] || '—');
-        if (c[0] === 'phone') td.setAttribute('dir', 'ltr');
+        var ltrCol = c[0] === 'phone' || c[0] === 'ref';
+        var td = el('td', ltrCol ? 'nowrap' : null, r[c[0]] || '—');
+        if (ltrCol) td.setAttribute('dir', 'ltr');
+        if (c[0] === 'ref') td.className = 'nowrap ref-cell';
         tr.appendChild(td);
       });
 
@@ -209,7 +235,7 @@
           sel.appendChild(o);
         });
         sel.addEventListener('change', async function () {
-          try { await OTAPI.patch(t.key, r.id, { status: sel.value }, await token()); note('تم تحديث الحالة.', 'ok'); }
+          try { await OTAPI.patch(t.key, r.id, { status: sel.value }, await token()); r.status = sel.value; note('تم تحديث الحالة. يرى العميل الآن: «' + publicStage(sel.value) + '».', 'ok'); }
           catch (e) { note('تعذّر تحديث الحالة.', 'err'); }
         });
         st.appendChild(sel);
@@ -277,7 +303,14 @@
     var box = el('div', 'det');
 
     var d = r.details || [];
-    if (d.length) {
+    if (t.key === 'inquiries') {
+      var dl0 = el('dl');
+      [['رقم الطلب', r.ref], ['القسم والخدمة', r.service], ['الاسم', r.full_name], ['الهاتف', r.phone], ['تفاصيل الطلب', r.message]].forEach(function (x) {
+        dl0.appendChild(el('dt', null, x[0])); dl0.appendChild(el('dd', null, x[1] || '—'));
+      });
+      box.appendChild(el('h4', null, 'بيانات الطلب'));
+      box.appendChild(dl0);
+    } else if (d.length) {
       var h = el('h4', null, 'بيانات الاستمارة');
       var dl = el('dl');
       d.forEach(function (x) { dl.appendChild(el('dt', null, x.l)); dl.appendChild(el('dd', null, x.v)); });
@@ -353,7 +386,19 @@
     });
     var sv = el('button', 'btn btn-primary btn-sm', 'حفظ المتابعة');
     sv.type = 'submit';
-    f.appendChild(sv);
+    var notify = el('a', 'btn btn-ghost btn-sm', 'إبلاغ العميل بالحالة عبر واتساب');
+    notify.href = '#'; notify.target = '_blank'; notify.rel = 'noopener noreferrer';
+    notify.addEventListener('click', function () {
+      var who = r.full_name || r.org_name || '';
+      var nt = (r.public_note || '').trim();
+      var msg = 'مرحبًا' + (who ? ' ' + who : '') + '،\nتحديث على طلبك رقم ' + r.ref + ' لدى مكتب أونلاين تك:\nالحالة الآن: ' + publicStage(r.status) + '.' +
+        (nt ? '\n' + nt : '') + '\nلمتابعة طلبك: ' + location.origin + '/track.html?ref=' + r.ref;
+      notify.href = waFor(r.phone).replace(/\?.*$/, '') + '?text=' + encodeURIComponent(msg);
+    });
+    var fr = el('div', 'btn-row');
+    fr.appendChild(sv);
+    if (r.phone && r.ref) fr.appendChild(notify);
+    f.appendChild(fr);
     f.addEventListener('submit', async function (e) {
       e.preventDefault();
       sv.disabled = true;
