@@ -139,7 +139,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
     ? `<header class="site-header"><div class="container bar"><a class="brand" href="/index.html">${logoImg()}</a><div class="bar-end"><span class="brand-note">لوحة الإدارة</span>${THEME_CTL}</div></div></header>`
     : `<header class="site-header"><div class="container bar">
   <a class="brand" href="/index.html" aria-label="${esc(S.name)} — الرئيسية">${logoImg()}</a>
-  <nav class="nav" id="nav" aria-label="القائمة الرئيسية">${nav}<button class="btn btn-primary btn-sm" type="button" data-open-chat>تحدث معنا</button></nav>
+  <nav class="nav" id="nav" aria-label="القائمة الرئيسية">${nav}<button class="btn btn-primary btn-sm" type="button" data-open-chat>تحدث مع رفيق</button></nav>
   <div class="bar-end">${THEME_CTL}
   <button class="menu-btn" type="button" id="menuBtn" aria-expanded="false" aria-controls="nav"><span class="sr">القائمة</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
 </div></header>`;

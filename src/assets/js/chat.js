@@ -59,17 +59,17 @@
   fab.type = 'button';
   fab.setAttribute('aria-haspopup', 'dialog');
   fab.setAttribute('aria-expanded', 'false');
-  fab.appendChild(el('span', null, 'تحدث معنا'));
+  fab.appendChild(el('span', null, 'تحدث مع رفيق'));
 
   var panel = el('section', 'chat-panel');
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'المساعد الذكي لمكتب أونلاين تك');
+  panel.setAttribute('aria-label', 'رفيق، المساعد الآلي لمكتب أونلاين تك');
   panel.hidden = true;
 
   var head = el('div', 'chat-h');
   var ht = el('div');
-  ht.appendChild(el('strong', null, 'مكتب أونلاين تك'));
-  ht.appendChild(el('span', null, 'المساعد الذكي · قد يخطئ، راجع المعلومات المهمة'));
+  ht.appendChild(el('strong', null, 'رفيق'));
+  ht.appendChild(el('span', null, 'المساعد الآلي لمكتب أونلاين تك · قد يخطئ، راجع المعلومات المهمة'));
   var close = el('button', 'chat-x', '×');
   close.type = 'button';
   close.setAttribute('aria-label', 'إغلاق المحادثة');
