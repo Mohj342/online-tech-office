@@ -811,6 +811,26 @@ const cfg = {
   CATEGORIES: Object.assign(Object.fromEntries(SV.map((s) => [s.slug, s.title])), { office: 'المكتب وفريق العمل' })
 };
 fs.writeFileSync(path.join(dist, 'assets/js/config.js'), `window.OT=${JSON.stringify(cfg)};\n`);
+
+// Plain-text knowledge for the website assistant (the edge function fetches this file, so copy edits here reach it without redeploying).
+{
+  const L = [];
+  L.push('## عن المكتب', ABOUT.lead, ...ABOUT.intro, 'الرسالة: ' + ABOUT.mission, 'الرؤية: ' + ABOUT.vision, 'الغاية: ' + ABOUT.purpose);
+  L.push('القيم: ' + ABOUT.values.map(([t, d]) => `${t} (${d})`).join(' | '));
+  L.push('الأهداف: ' + ABOUT.goals.join(' | '));
+  L.push('سياسة العمل: ' + ABOUT.policy.map(([t, d]) => `${t}: ${d}`).join(' | '));
+  L.push('', '## الأقسام وخدماتها');
+  for (const sv of SV) {
+    const d = SERVICE_DETAILS[sv.slug] || {};
+    L.push(`### ${sv.n}) ${sv.title} (page=${sv.slug === 'employment' ? 'jobs' : sv.slug})`, sv.short, d.intro || sv.intro || '');
+    if (d.items) L.push('الخدمات: ' + d.items.join('، '));
+  }
+  L.push('', '## أسئلة شائعة');
+  for (const [q, a] of FAQ) L.push(`س: ${q}`, `ج: ${a}`);
+  L.push('', '## شروط مهمة');
+  for (const [t, arr] of TERMS) L.push(`${t}: ${arr.join(' ')}`);
+  fs.writeFileSync(path.join(dist, 'assistant-knowledge.txt'), L.filter((x) => x !== undefined).join('\n') + '\n');
+}
 fs.writeFileSync(path.join(dist, 'robots.txt'), `User-agent: *\nDisallow: /admin/\n\nSitemap: ${S.siteUrl}/sitemap.xml\n`);
 const today = new Date().toISOString().slice(0, 10);
 const urls = Object.keys(pages).filter((f) => f !== '404.html' && !f.startsWith('admin/'));
