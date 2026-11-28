@@ -14,7 +14,7 @@
     rejected: ['مرفوض', 'نعتذر، تعذّر تنفيذ هذا الطلب. تواصل معنا لمعرفة التفاصيل.'],
     closed: ['مغلق', 'تم إغلاق هذا الطلب. تواصل معنا إذا احتجت أي مساعدة.']
   };
-  var KIND = { job: 'طلب توظيف', employer: 'طلب موظفين', service: 'طلب خدمة' };
+  var KIND = { job: 'طلب توظيف', employer: 'طلب موظفين', service: 'طلب خدمة', listing: 'إعلان' };
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function date(s) {
@@ -62,6 +62,19 @@
       n.appendChild(el('strong', null, 'ملاحظة من المكتب'));
       n.appendChild(el('p', null, r.note));
       card.appendChild(n);
+    }
+    if (r.kind === 'listing' && r.stage === 'done') {
+      var sold = el('button', 'btn btn-ghost btn-sm', 'تم بيع الغرض – أوقف الإعلان');
+      sold.type = 'button';
+      sold.addEventListener('click', async function () {
+        if (!confirm('تأكيد: تم البيع وسيختفي الإعلان من السوق؟')) return;
+        sold.disabled = true;
+        try {
+          var ok = await OTAPI.rpc('mark_listing_sold', { p_ref: ref, p_phone: form.elements.phone.value });
+          sold.textContent = ok ? 'تم إيقاف الإعلان ✓' : 'الإعلان متوقف أو غير منشور';
+        } catch (err) { sold.disabled = false; sold.textContent = 'تعذّر الآن، حاول لاحقًا'; }
+      });
+      card.appendChild(sold);
     }
     var meta = el('p', 'track-meta', 'تاريخ الطلب: ' + date(r.created_at) + ' · آخر تحديث: ' + date(r.updated_at));
     card.appendChild(meta);

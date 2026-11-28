@@ -32,6 +32,7 @@
     { key: 'vacancies', label: 'الوظائف المنشورة', vacancies: true, cols: [
       ['title', 'المسمى'], ['company', 'الجهة'], ['location', 'المكان'], ['job_type', 'النوع'],
       ['description', 'الوصف'], ['requirements', 'المتطلبات']] },
+    { key: 'listings', label: 'سوق الإعلانات', market: true },
     { key: 'reviews', label: 'آراء العملاء', cms: true },
     { key: 'works', label: 'أعمالنا', cms: true },
     { key: 'partners', label: 'الشركاء', cms: true },
@@ -157,6 +158,7 @@
     try {
       var rows = await OTAPI.select(t.key, 'select=*&order=' + (t.cms ? OTCMS.order(t.key) : 'created_at.desc') + '&limit=300', await token());
       if (t !== tab) return;
+      if (t.market) { OTMARKET.render(view, rows, { token: token, note: note, reload: loadTab }); return; }
       if (t.cms) { OTCMS.render(view, t, rows, { token: token, note: note, reload: loadTab }); return; }
       render(t, rows);
     } catch (err) {

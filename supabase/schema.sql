@@ -470,3 +470,113 @@ create policy works_auth_read    on public.works    for select to authenticated 
 create policy partners_auth_read on public.partners for select to authenticated using (is_published or (select public.is_admin()));
 create policy news_auth_read     on public.news     for select to authenticated using (is_published or (select public.is_admin()));
 create policy reviews_auth_read  on public.reviews  for select to authenticated using (status = 'approved' or (select public.is_admin()));
+
+-- ===== marketplace_listings (see also migrations marketplace_listings / marketplace_track_and_sold applied on Supabase) =====
+-- Marketplace (سوق الإعلانات): visitors submit listings for review; admins publish. Seller phone hidden unless the seller opts in.
+create or replace function public.listing_images_ok(a jsonb, rid uuid, prefix text)
+returns boolean language sql immutable set search_path = '' as $$
+  select jsonb_typeof(a) = 'array' and jsonb_array_length(a) <= 10
+     and not exists (select 1 from jsonb_array_elements(a) e
+       where jsonb_typeof(e) <> 'object' or coalesce(e->>'path','') not like (prefix || rid::text || '/%'));
+$$;
+
+create table public.listings (
+  id uuid primary key default gen_random_uuid(),
+  ref text not null default public.gen_ref() check (ref ~ '^OT-[0-9]{6}$') unique,
+  kind text not null default 'sale' check (kind in ('sale','rent','wanted')),
+  category text not null check (category in ('cars','realestate','furniture','electronics','appliances','fashion','equipment','animals','other')),
+  title text not null check (char_length(title) between 3 and 120),
+  description text not null check (char_length(description) between 10 and 3000),
+  price numeric(14,0) check (price >= 0),
+  currency text not null default 'YER' check (currency in ('YER','SAR','USD')),
+  negotiable boolean not null default false,
+  condition text check (condition in ('new','used')),
+  city text not null check (char_length(city) between 2 and 80),
+  seller_name text not null check (char_length(seller_name) between 2 and 80),
+  phone text not null check (char_length(phone) between 6 and 30),
+  show_phone boolean not null default false,
+  public_phone text,                       -- filled by trigger only when show_phone
+  images jsonb not null default '[]'::jsonb,         -- private uploads (with quality notes)
+  public_images jsonb not null default '[]'::jsonb,  -- copies in the public bucket, set on publish
+  consent boolean not null default false,
+  source text not null default 'web' check (source in ('web','office')),
+  status text not null default 'pending' check (status in ('pending','published','rejected','sold','archived')),
+  public_note text check (char_length(public_note) <= 500),
+  admin_notes text check (char_length(admin_notes) <= 4000),
+  published_at timestamptz,
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint listings_images_check check (public.listing_images_ok(images, id, 'uploads/')),
+  constraint listings_public_images_check check (public.listing_images_ok(public_images, id, 'listings/'))
+);
+create index listings_pub_idx on public.listings (status, expires_at desc, published_at desc);
+create index listings_cat_idx on public.listings (category, status);
+
+-- keep public_phone in sync; unique request numbers across tables; updated_at
+create or replace function public.listings_before() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  new.public_phone := case when new.show_phone then new.phone else null end;
+  if tg_op = 'INSERT' or new.ref is distinct from old.ref then
+    if exists (select 1 from public.job_seekers where ref = new.ref)
+    or exists (select 1 from public.employer_requests where ref = new.ref)
+    or exists (select 1 from public.inquiries where ref = new.ref) then
+      raise exception 'duplicate request number' using errcode = '23505';
+    end if;
+  end if;
+  if tg_op = 'UPDATE' then new.updated_at := now(); end if;
+  if new.status = 'published' and (tg_op = 'INSERT' or old.status is distinct from 'published') then
+    new.published_at := coalesce(new.published_at, now());
+    new.expires_at := coalesce(new.expires_at, now() + interval '30 days');
+  end if;
+  return new;
+end $$;
+revoke execute on function public.listings_before() from public, anon, authenticated;
+create trigger listings_before before insert or update on public.listings for each row execute function public.listings_before();
+
+-- other request tables must also refuse numbers already used by listings
+create or replace function public.request_ref_guard() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'INSERT' or new.ref is distinct from old.ref then
+    if (tg_table_name <> 'job_seekers'       and exists (select 1 from public.job_seekers       where ref = new.ref))
+    or (tg_table_name <> 'employer_requests' and exists (select 1 from public.employer_requests where ref = new.ref))
+    or (tg_table_name <> 'inquiries'         and exists (select 1 from public.inquiries         where ref = new.ref))
+    or exists (select 1 from public.listings where ref = new.ref) then
+      raise exception 'duplicate request number' using errcode = '23505';
+    end if;
+  end if;
+  if tg_op = 'UPDATE' then new.updated_at := now(); end if;
+  return new;
+end $$;
+
+alter table public.listings enable row level security;
+revoke all on public.listings from anon;
+grant select (id, ref, kind, category, title, description, price, currency, negotiable, condition, city, seller_name, public_phone, public_images, published_at, expires_at) on public.listings to anon;
+grant insert (id, kind, category, title, description, price, currency, negotiable, condition, city, seller_name, phone, show_phone, images, consent) on public.listings to anon;
+
+create policy listings_public_read on public.listings for select to anon
+  using (status = 'published' and expires_at > now());
+create policy listings_insert on public.listings for insert to anon, authenticated
+  with check (status = 'pending' and consent and source = 'web' and public_note is null and admin_notes is null
+              and public_images = '[]'::jsonb and published_at is null and expires_at is null);
+create policy listings_auth_read on public.listings for select to authenticated
+  using ((status = 'published' and expires_at > now()) or (select public.is_admin()));
+create policy listings_admin_insert on public.listings for insert to authenticated with check ((select public.is_admin()));
+create policy listings_admin_update on public.listings for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy listings_admin_delete on public.listings for delete to authenticated using ((select public.is_admin()));
+
+-- private bucket for sellers' photos (8 MB; the page compresses before upload)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('listing-uploads', 'listing-uploads', false, 8388608, array['image/jpeg','image/png','image/webp','image/heic','image/heif']);
+create policy listing_uploads_anon on storage.objects for insert to anon, authenticated
+  with check (bucket_id = 'listing-uploads' and (storage.foldername(name))[1] = 'uploads');
+create policy listing_uploads_admin_read on storage.objects for select to authenticated
+  using (bucket_id = 'listing-uploads' and (select public.is_admin()));
+create policy listing_uploads_admin_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'listing-uploads' and (select public.is_admin()));
+-- admins may also read site-media (needed by the storage copy endpoint)
+create policy site_media_admin_read on storage.objects for select to authenticated
+  using (bucket_id = 'site-media' and (select public.is_admin()));
+alter table public.listings alter column show_phone set default true;

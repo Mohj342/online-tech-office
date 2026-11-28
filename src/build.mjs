@@ -86,6 +86,7 @@ const NAV = [
   ['من نحن', '/about.html'],
   ['خدماتنا', '/services.html'],
   ['التوظيف', '/services/employment.html'],
+  ['السوق', '/market.html'],
   ['تابع طلبك', '/track.html'],
   ['تواصل معنا', '/contact.html']
 ];
@@ -155,7 +156,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
       <li><a href="/employers.html">طلب موظفين</a></li>
     </ul></div>
   </div>
-  <div class="container foot-bottom"><span>© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</span><nav class="foot-links" aria-label="روابط السياسات"><a href="/track.html">تابع طلبك</a><a href="/works.html">أعمالنا</a><a href="/reviews.html">آراء العملاء</a><a href="/news.html">الأخبار والإعلانات</a><a href="/faq.html">الأسئلة الشائعة</a><a href="/privacy.html">سياسة الخصوصية</a><a href="/terms.html">شروط الاستخدام</a></nav></div>
+  <div class="container foot-bottom"><span>© ${S.year} ${esc(S.fullName)}. جميع الحقوق محفوظة.</span><nav class="foot-links" aria-label="روابط السياسات"><a href="/market.html">سوق الإعلانات</a><a href="/track.html">تابع طلبك</a><a href="/works.html">أعمالنا</a><a href="/reviews.html">آراء العملاء</a><a href="/news.html">الأخبار والإعلانات</a><a href="/faq.html">الأسئلة الشائعة</a><a href="/privacy.html">سياسة الخصوصية</a><a href="/terms.html">شروط الاستخدام</a></nav></div>
 </footer>`;
   const scriptTags = ['/assets/js/theme.js', '/assets/js/config.js', '/assets/js/api.js']
     .concat(minimal ? [] : ['/assets/js/nav.js'])
@@ -610,6 +611,83 @@ pages['track.html'] = layout({
 </div></section>`
 });
 
+
+const MARKET_CATS = [["cars", "🚗", "سيارات ومركبات"], ["realestate", "🏠", "عقارات وأراضي"], ["furniture", "🛋️", "أثاث ومفروشات"], ["electronics", "📱", "إلكترونيات وجوالات"], ["appliances", "🧊", "أجهزة كهربائية ومنزلية"], ["fashion", "👕", "ملابس وأزياء"], ["equipment", "🛠️", "معدات وأدوات"], ["animals", "🐑", "حيوانات ومواشي"], ["other", "📦", "أخرى"]];
+const opts = MARKET_CATS.map(([k, e, t]) => `<option value="${k}">${e} ${t}</option>`).join('');
+const MARKET_SCRIPTS = ['/assets/js/market-common.js'];
+pages['market.html'] = layout({
+  file: 'market.html',
+  title: 'سوق الإعلانات',
+  desc: `سوق ${S.fullName}: بيع وشراء وإيجار سيارات وعقارات وأثاث وإلكترونيات وكل ما تحتاجه في ذمار واليمن.`,
+  scripts: [...MARKET_SCRIPTS, '/assets/js/market.js'],
+  body: `${pageHero({ title: 'سوق الإعلانات', lead: 'بيع واشترِ وأجّر كل ما تحتاجه: سيارات، عقارات، أثاث، إلكترونيات وغيرها. كل إعلان يراجعه المكتب قبل نشره.' })}
+<section class="section"><div class="container">
+  <div class="btn-row market-top"><a class="btn btn-primary" href="/sell.html">+ أضف إعلانك مجانًا</a><a class="btn btn-ghost" href="/track.html">تابع إعلانك</a></div>
+  <div class="chip-row" id="marketCats" role="group" aria-label="الأقسام"></div>
+  <div class="market-filters">
+    <div class="field"><label for="m_q">ابحث</label><input type="search" id="m_q" data-mf="q" placeholder="مثال: غسالة، هايلكس…"></div>
+    <div class="field"><label for="m_kind">النوع</label><select id="m_kind" data-mf="kind"><option value="">الكل</option><option value="sale">للبيع</option><option value="rent">للإيجار</option><option value="wanted">مطلوب</option></select></div>
+    <div class="field"><label for="m_city">المدينة</label><input type="text" id="m_city" data-mf="city" placeholder="ذمار"></div>
+    <div class="field"><label for="m_max">أعلى سعر</label><input type="number" id="m_max" data-mf="max" min="0" inputmode="numeric" dir="ltr"></div>
+  </div>
+  <div class="ads-grid" id="marketGrid" aria-live="polite"></div>
+</div></section>`
+});
+
+pages['listing.html'] = layout({
+  file: 'listing.html',
+  title: 'تفاصيل الإعلان',
+  desc: `تفاصيل إعلان في سوق ${S.fullName}.`,
+  scripts: [...MARKET_SCRIPTS, '/assets/js/listing.js'],
+  body: `${pageHero({ title: 'تفاصيل الإعلان', crumbs: [['سوق الإعلانات', '/market.html']] })}
+<section class="section"><div class="container"><div id="listingBox"><p>جارٍ التحميل…</p></div></div></section>`
+});
+
+pages['sell.html'] = layout({
+  file: 'sell.html',
+  title: 'أضف إعلانك',
+  desc: `أضف إعلانك مجانًا في سوق ${S.fullName}. يراجعه المكتب وينشره.`,
+  scripts: [...MARKET_SCRIPTS, '/assets/js/sell.js'],
+  body: `${pageHero({ title: 'أضف إعلانك', lead: 'أضف بيانات الغرض وصوره. يراجعه المكتب وينشره بعد الموافقة. بدون حساب، وتتابع إعلانك برقم الطلب.' })}
+<section class="section"><div class="container layout2">
+  <div class="panel">
+    <div class="form-msg" id="sellDone" hidden></div>
+    <form class="form" id="sellForm" novalidate aria-label="إضافة إعلان">
+      <div class="grid2">
+        <div class="field"><label for="s_kind">نوع الإعلان <span class="req">*</span></label><select id="s_kind" name="kind" required><option value="sale">للبيع</option><option value="rent">للإيجار</option><option value="wanted">مطلوب (أبحث عن)</option></select></div>
+        <div class="field"><label for="s_cat">القسم <span class="req">*</span></label><select id="s_cat" name="category" required><option value="">اختر…</option>${opts}</select></div>
+      </div>
+      ${field('title', 'عنوان الإعلان', { req: 1, max: 120 }).replaceAll('f_title', 's_title')}
+      ${field('description', 'الوصف (الحالة، المواصفات، أي تفاصيل)', { textarea: 1, req: 1, max: 3000, rows: 5 }).replaceAll('f_description', 's_desc')}
+      <div class="grid2">
+        <div class="field"><label for="s_price">السعر (اتركه فارغًا إن أردت التواصل)</label><input type="text" id="s_price" name="price" inputmode="numeric" dir="ltr" maxlength="14"></div>
+        <div class="field"><label for="s_cur">العملة</label><select id="s_cur" name="currency"><option value="YER">ريال يمني</option><option value="SAR">ريال سعودي</option><option value="USD">دولار</option></select></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="s_cond">الحالة</label><select id="s_cond" name="condition"><option value="">غير محدد</option><option value="new">جديد</option><option value="used">مستعمل</option></select></div>
+        <label class="check"><input type="checkbox" name="negotiable"> <span>السعر قابل للتفاوض</span></label>
+      </div>
+      <div class="field"><label>الصور <span class="req">*</span> <small id="photoCount">0 / 8</small></label>
+        <input type="file" id="photoInput" accept="image/*" multiple>
+        <p class="hint">الصور الواضحة والمضيئة تبيع أسرع. نفحص الصور تلقائيًا وننبهك إن كانت غير واضحة، والمكتب يراجعها أيضًا. أول صورة هي الرئيسية.</p>
+        <ul class="photo-list" id="photoList"></ul>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="s_name">اسمك <span class="req">*</span></label><input type="text" id="s_name" name="seller_name" required minlength="2" maxlength="80" autocomplete="name"></div>
+        <div class="field"><label for="s_city">المدينة <span class="req">*</span></label><input type="text" id="s_city" name="city" required minlength="2" maxlength="80" value="ذمار"></div>
+      </div>
+      <div class="field"><label for="s_phone">رقم جوالك <span class="req">*</span></label><input type="tel" id="s_phone" name="phone" dir="ltr" inputmode="tel" required minlength="6" maxlength="30" autocomplete="tel"></div>
+      <label class="check"><input type="checkbox" name="show_phone" checked> <span>أظهر رقمي في الإعلان ليتصل بي المشترون مباشرة (يمكنك إلغاء التحديد ويتواصل المشترون عبر واتساب المكتب).</span></label>
+      <label class="check"><input type="checkbox" name="consent" required> <span>أؤكد أن بياناتي صحيحة وأن الغرض مملوك لي، وأوافق على نشر الإعلان بعد المراجعة.</span></label>
+      <div class="hp" aria-hidden="true"><label>لا تملأ هذا الحقل<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+      <div class="form-msg" role="status" aria-live="polite" hidden></div>
+      <button class="btn btn-primary" type="submit">إرسال الإعلان للمراجعة</button>
+    </form>
+  </div>
+  ${contactSide()}
+</div></section>`
+});
+
 pages['faq.html'] = layout({
   file: 'faq.html',
   title: 'الأسئلة الشائعة',
@@ -688,7 +766,7 @@ pages['admin/index.html'] = layout({
   desc: 'لوحة إدارة مكتب أونلاين تك.',
   noindex: true,
   minimal: true,
-  scripts: ['/assets/js/admin-cms.js', '/assets/js/admin.js'],
+  scripts: ['/assets/js/admin-cms.js', '/assets/js/admin-market.js', '/assets/js/admin.js'],
   body: `<div class="admin-wrap">
   <section id="login" class="panel login-card" hidden>
     <h1 class="sr">تسجيل الدخول</h1>
