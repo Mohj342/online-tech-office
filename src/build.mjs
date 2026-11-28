@@ -767,7 +767,7 @@ pages['admin/index.html'] = layout({
   desc: 'لوحة إدارة مكتب أونلاين تك.',
   noindex: true,
   minimal: true,
-  scripts: ['/assets/js/admin-cms.js', '/assets/js/admin-market.js', '/assets/js/admin.js'],
+  scripts: ['/assets/js/admin-cms.js', '/assets/js/admin-market.js', '/assets/js/admin-rafeeq.js', '/assets/js/admin.js'],
   body: `<div class="admin-wrap">
   <section id="login" class="panel login-card" hidden>
     <h1 class="sr">تسجيل الدخول</h1>

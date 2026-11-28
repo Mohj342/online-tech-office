@@ -21,6 +21,7 @@
   };
   var vacPrefill = null;
   var TABS = [
+    { key: 'rafeeq', label: '🤖 اسأل رفيق', rafeeq: true },
     { key: 'job_seekers', label: 'الباحثون عن عمل', status: true, statuses: SEEKER_STATUS, details: true, cols: [
       ['ref', 'رقم الطلب'], ['full_name', 'الاسم'], ['qualification', 'المؤهل والتخصص'], ['experience', 'الخبرات'],
       ['desired_job', 'الوظيفة المطلوبة'], ['residence', 'الإقامة'], ['phone', 'الهاتف']] },
@@ -137,6 +138,8 @@
     loadTab();
   }
 
+  window.OTAdmin = { open: function (k) { var t = TABS.filter(function (x) { return x.key === k; })[0]; if (t) { tab = t; renderTabs(); loadTab(); } } };
+
   function renderTabs() {
     var bar = $('tabs');
     bar.textContent = '';
@@ -154,6 +157,7 @@
     var view = $('view');
     note('');
     if (t.settings) { renderSettings(); return; }
+    if (t.rafeeq) { OTRAFEEQ.render(view, { token: token, note: note }); return; }
     view.textContent = 'جارٍ التحميل…';
     try {
       var rows = await OTAPI.select(t.key, 'select=*&order=' + (t.cms ? OTCMS.order(t.key) : 'created_at.desc') + '&limit=300', await token());
