@@ -1,5 +1,5 @@
 // Website assistant for مكتب أونلاين تك. Called from the browser chat widget.
-// The Anthropic key lives only in the function secret ANTHROPIC_API_KEY. Replies are JSON {reply, action}; actions are validated against allow-lists here.
+// Keys live only in function secrets: GEMINI_API_KEY (free tier, preferred when set) or ANTHROPIC_API_KEY. Replies are JSON {reply, action}; actions are validated against allow-lists here.
 const MODEL = "claude-haiku-5-5";
 const HOURLY_PER_IP = 30;
 const DAILY_TOTAL = 1500;
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return json({ error: "method" }, 405);
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) return json({ error: "not_configured" }, 503);
+  if (!apiKey && !Deno.env.get("GEMINI_API_KEY")) return json({ error: "not_configured" }, 503);
 
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
@@ -90,14 +90,28 @@ Deno.serve(async (req) => {
 
   let text = "";
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 600, system: SYSTEM, messages: msgs }),
-    });
-    if (!r.ok) { console.error("anthropic", r.status, await r.text()); return json({ error: "upstream" }, 502); }
-    const j = await r.json();
-    text = (j.content || []).map((c: any) => c.text || "").join("").trim();
+    const gKey = Deno.env.get("GEMINI_API_KEY");
+    let r: Response;
+    if (gKey) {
+      // Free tier: Google AI Studio through its OpenAI-compatible endpoint
+      r = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + gKey, "content-type": "application/json" },
+        body: JSON.stringify({ model: Deno.env.get("GEMINI_MODEL") || "gemini-3.5-flash-lite", max_tokens: 600, messages: [{ role: "system", content: SYSTEM }, ...msgs] }),
+      });
+      if (!r.ok) { console.error("gemini", r.status, await r.text()); return json({ error: "upstream" }, 502); }
+      const j = await r.json();
+      text = String(j.choices?.[0]?.message?.content || "").trim();
+    } else {
+      r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: MODEL, max_tokens: 600, system: SYSTEM, messages: msgs }),
+      });
+      if (!r.ok) { console.error("anthropic", r.status, await r.text()); return json({ error: "upstream" }, 502); }
+      const j = await r.json();
+      text = (j.content || []).map((c: any) => c.text || "").join("").trim();
+    }
   } catch (e) { console.error(e); return json({ error: "upstream" }, 502); }
 
   let reply = text, action = clean(null);
