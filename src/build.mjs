@@ -161,6 +161,7 @@ function layout({ file, title, desc, body, scripts = [], noindex = false, chat =
   const scriptTags = ['/assets/js/theme.js', '/assets/js/config.js', '/assets/js/api.js']
     .concat(minimal ? [] : ['/assets/js/nav.js'])
     .concat(body.includes('data-table=') ? ['/assets/js/forms.js'] : [])
+    .concat(body.includes('<form') && !minimal ? ['/assets/js/prefill.js'] : [])
     .concat(scripts)
     .concat(chat && !minimal ? ['/assets/js/chat.js'] : [])
     .map((s) => `<script src="${asset(s)}" defer></script>`).join('\n');

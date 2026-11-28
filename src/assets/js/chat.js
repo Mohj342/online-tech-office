@@ -63,13 +63,13 @@
 
   var panel = el('section', 'chat-panel');
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'الرد التلقائي لمكتب أونلاين تك');
+  panel.setAttribute('aria-label', 'المساعد الذكي لمكتب أونلاين تك');
   panel.hidden = true;
 
   var head = el('div', 'chat-h');
   var ht = el('div');
   ht.appendChild(el('strong', null, 'مكتب أونلاين تك'));
-  ht.appendChild(el('span', null, 'الرد التلقائي'));
+  ht.appendChild(el('span', null, 'المساعد الذكي · قد يخطئ، راجع المعلومات المهمة'));
   var close = el('button', 'chat-x', '×');
   close.type = 'button';
   close.setAttribute('aria-label', 'إغلاق المحادثة');
@@ -85,7 +85,7 @@
   var inp = el('input');
   inp.type = 'text';
   inp.id = 'chatMsg';
-  inp.placeholder = 'أرسل رقم القسم أو اكتب استفسارك';
+  inp.placeholder = 'اكتب طلبك أو سؤالك، أو أرسل رقم القسم';
   inp.setAttribute('aria-label', 'رسالتك');
   var sendBtn = el('button', 'chat-send', 'إرسال');
   sendBtn.type = 'submit';
@@ -178,14 +178,49 @@
     await say(CONTACT, { ms: 650 });
     setChips(BACK);
   }
-  async function free(text) {
+  var history = [];
+  var AI_URL = C.SUPABASE_URL + '/functions/v1/assistant';
+  var aiOff = false;
+  function human(text) {
     var ctx = current ? ('القسم: ' + current.title + '\n') : '';
-    await say('هذه المحادثة لا ترسل رسائلك إلى المكتب. لإيصال استفسارك إلى الفريق أرسله عبر واتساب، أو استخدم نموذج صفحة التواصل.',
+    return say('هذه المحادثة لا ترسل رسائلك إلى المكتب. لإيصال استفسارك إلى الفريق أرسله عبر واتساب، أو استخدم نموذج صفحة التواصل.',
       { acts: [
         { label: 'إرسال عبر واتساب', href: waLink('استفسار من موقع أونلاين تك\n' + ctx + text) },
         { label: 'صفحة التواصل', ghost: true, href: '/contact.html' }
       ], ms: 450 });
-    setChips(BACK);
+  }
+  async function free(text) {
+    if (aiOff) { await human(text); setChips(BACK); return; }
+    var t = el('div', 'msg bot typing');
+    t.setAttribute('aria-hidden', 'true');
+    t.appendChild(el('i')); t.appendChild(el('i')); t.appendChild(el('i'));
+    log.appendChild(t); toEnd();
+    history.push({ role: 'user', content: (current && history.length === 0 ? '(الزائر فاتح قسم: ' + current.title + ') ' : '') + text });
+    try {
+      var ctl = new AbortController(), to = setTimeout(function () { ctl.abort(); }, 25000);
+      var res = await fetch(AI_URL, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', apikey: C.SUPABASE_KEY }, body: JSON.stringify({ messages: history.slice(-10) }) });
+      clearTimeout(to);
+      if (res.status === 429) { t.remove(); history.pop(); await say('وصلت للحد الأقصى من الرسائل حاليًا. يمكنك مراسلتنا مباشرة عبر واتساب.', { acts: [{ label: 'واتساب', href: waLink(text) }], ms: 200 }); setChips(BACK); return; }
+      if (!res.ok) throw new Error('ai ' + res.status);
+      var j = await res.json();
+      t.remove();
+      history.push({ role: 'assistant', content: j.reply });
+      var a = j.action || {}, acts = [];
+      if (a.type === 'page' && /^\/[a-z\/]+\.html$/.test(a.page || '')) {
+        var q = [];
+        Object.keys(a.fill || {}).forEach(function (k) { if (/^[a-z_]+$/.test(k)) q.push('p_' + k + '=' + encodeURIComponent(String(a.fill[k]).slice(0, 300))); });
+        acts.push({ label: a.label || 'افتح النموذج', href: a.page + (q.length ? '?' + q.join('&') : '') });
+      } else if (a.type === 'whatsapp') {
+        acts.push({ label: a.label || 'أرسل عبر واتساب', href: waLink(a.text || text) });
+      }
+      bot(j.reply, { acts: acts });
+      if (a.type === 'page' && a.fill && Object.keys(a.fill).length) bot('سأعبّي لك ما ذكرته في النموذج، راجعه وأكمل الباقي ثم اضغط إرسال بنفسك.');
+      setChips(BACK);
+    } catch (e) {
+      t.remove(); history.pop();
+      aiOff = true;
+      await human(text); setChips(BACK);
+    }
   }
 
   async function respond(raw) {

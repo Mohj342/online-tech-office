@@ -580,3 +580,12 @@ create policy listing_uploads_admin_delete on storage.objects for delete to auth
 create policy site_media_admin_read on storage.objects for select to authenticated
   using (bucket_id = 'site-media' and (select public.is_admin()));
 alter table public.listings alter column show_phone set default true;
+create table if not exists public.ai_usage (
+  id bigint generated always as identity primary key,
+  ip text not null,
+  at timestamptz not null default now()
+);
+create index if not exists ai_usage_ip_at on public.ai_usage (ip, at);
+create index if not exists ai_usage_at on public.ai_usage (at);
+alter table public.ai_usage enable row level security;
+revoke all on public.ai_usage from anon, authenticated;
